@@ -824,100 +824,348 @@ elif section == "Economic Crime":
 # ═══════════════════════════════════════════════════════════════════
 # 3. CRIME & DEPRIVATION
 # ═══════════════════════════════════════════════════════════════════
-
 elif section == "Crime & Deprivation":
     st.title("Crime & Deprivation")
     st.markdown("""
-    The cost of living crisis didn't hit all of London equally. Areas that 
-    were already deprived before the crisis began were more exposed — and 
-    the data shows that deprivation remains the strongest predictor of local 
-    crime rates.
+    Does deprivation predict crime in London? The answer is more nuanced than 
+    a simple yes — it depends entirely on which crime you're looking at, and 
+    which aspect of deprivation matters most.
     """)
 
-    # ── Borough outliers ──
-    st.subheader("Which boroughs punch above their weight?")
-    st.markdown("""
-    Each dot is a London borough plotted by deprivation rank against crime rate. 
-    Red boroughs have higher crime than their deprivation level predicts — 
-    green have lower crime than expected. The dashed line shows the expected trend.
-    """)
 
-    borough = load_borough()
-    cap = borough['crime_rate'].quantile(0.95)
-    borough['crime_rate_display'] = borough['crime_rate'].clip(upper=cap)
-    borough['label'] = borough.apply(
-        lambda x: x['borough'] if x['outlier_type'] != 'As expected' else '', axis=1
+    # ── Load data ──
+    @st.cache_data
+    def load_deprivation_data():
+        lsoa = pd.read_csv('data/processed/lsoa_deprivation_crime.csv')
+        domain_corr = pd.read_csv('data/processed/domain_crime_correlations.csv')
+        return lsoa, domain_corr
+
+
+    lsoa, domain_corr = load_deprivation_data()
+
+    # ── Derive narrative values ──
+    total_lsoas = len(lsoa)
+    deprived_high = lsoa[lsoa['outlier_type'] == 'Deprived and high crime']
+    affluent_high = lsoa[lsoa['outlier_type'] == 'Affluent but high crime']
+    deprived_low = lsoa[lsoa['outlier_type'] == 'Deprived but low crime']
+
+    top_affluent_borough = affluent_high['borough'].value_counts().index[0]
+    top_affluent_count = affluent_high['borough'].value_counts().iloc[0]
+
+    shop_corrs = domain_corr[domain_corr['crime_type'] == 'Shoplifting']
+    shop_max_corr = shop_corrs.loc[shop_corrs['correlation'].abs().idxmax()]
+    shop_income_corr = shop_corrs[
+        shop_corrs['deprivation_domain'] == 'Income'
+        ]['correlation'].values[0]
+
+    strongest = domain_corr[domain_corr['significant']] \
+        .sort_values('correlation', ascending=False).iloc[0]
+
+    CHART_CONFIG = {'displayModeBar': False, 'scrollZoom': False}
+
+    # ── Headline metrics ──
+    st.caption("Analysis based on 4,653 Lower Super Output Areas (LSOAs) — "
+               "small geographic units of ~1,500 residents each.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric(
+        "LSOAs analysed",
+        f"{total_lsoas:,}",
+        "Covering all 33 London boroughs"
     )
-
-    z = np.polyfit(borough['imd_rank'], borough['crime_rate_display'], 1)
-    p = np.poly1d(z)
-    x_line = np.linspace(borough['imd_rank'].min(), borough['imd_rank'].max(), 100)
-
-    fig = px.scatter(
-        borough, x='imd_rank', y='crime_rate_display',
-        color='outlier_type', text='label',
-        color_discrete_map={
-            'High crime for deprivation level': '#e74c3c',
-            'Low crime for deprivation level': '#2ecc71',
-            'As expected': '#95a5a6'
-        },
-        labels={
-            'imd_rank': 'Deprivation rank (higher = less deprived)',
-            'crime_rate_display': 'Median crime rate per 1,000 residents'
-        }
+    col2.metric(
+        "Deprived areas with surprisingly high crime",
+        f"{len(deprived_high)}",
+        f"{len(deprived_high) / total_lsoas * 100:.1f}% of all LSOAs"
     )
-    fig.add_scatter(x=x_line, y=p(x_line), mode='lines',
-                    line=dict(color='white', width=1, dash='dash'),
-                    name='Expected trend', showlegend=True)
-    fig.update_traces(textposition='top center', textfont_size=10,
-                      marker=dict(size=10), selector=dict(mode='markers+text'))
-    fig.update_layout(height=600, plot_bgcolor='rgba(0,0,0,0)',
-                      paper_bgcolor='rgba(0,0,0,0)', legend_title='')
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.caption(
-        "City of London capped at 95th percentile due to extremely small residential population relative to daytime footfall.")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Higher crime than deprivation predicts**")
-        high = borough[borough['outlier_type'] == 'High crime for deprivation level'] \
-            .sort_values('residual', ascending=False)[['borough', 'crime_rate', 'imd_rank']]
-        high.columns = ['Borough', 'Crime rate per 1k', 'Deprivation rank']
-        st.dataframe(high.round(1), hide_index=True)
-    with col2:
-        st.markdown("**Lower crime than deprivation predicts**")
-        low = borough[borough['outlier_type'] == 'Low crime for deprivation level'] \
-            .sort_values('residual')[['borough', 'crime_rate', 'imd_rank']]
-        low.columns = ['Borough', 'Crime rate per 1k', 'Deprivation rank']
-        st.dataframe(low.round(1), hide_index=True)
+    col3.metric(
+        "Affluent areas with surprisingly high crime",
+        f"{len(affluent_high)}",
+        f"Mostly {top_affluent_borough} & tourist zones"
+    )
 
     st.divider()
 
-    # ── Crime map ──
-    st.subheader("Crime clusters across London")
+    # ── Finding 1: Borough scatter plot ──
+    st.subheader("1. Where deprivation and crime don't follow the rules")
     st.markdown("""
-    LSOAs clustered by crime profile, normalised by population. Each dot represents 
-    one small area coloured by its dominant crime type. Based on 3,416,295 crimes 
-    recorded January 2023 – December 2025.
+    Each bubble represents one London borough. The further right, the more 
+    deprived. The higher up, the more crime per resident. Boroughs that sit 
+    well above or below the expected line are the interesting ones.
     """)
 
 
     @st.cache_data
-    def load_map_data():
-        return pd.read_csv('data/processed/cluster_map_data.csv')
+    def load_borough_deprivation():
+        return pd.read_csv('data/processed/borough_outliers_deprivation.csv')
 
 
-    map_data = load_map_data()
-    fig2 = px.scatter_mapbox(
-        map_data, lat='latitude', lon='longitude',
-        color='dominant_crime',
-        hover_name='lsoa_code',
-        hover_data={'latitude': False, 'longitude': False},
-        mapbox_style='carto-positron',
-        zoom=9, height=600
+    borough_dep = load_borough_deprivation()
+
+    color_map = {
+        'As expected': '#4a4a4a',
+        'Deprived and high crime': '#e74c3c',
+        'Affluent but high crime': '#e67e22',
+        'Deprived but low crime': '#2ecc71'
+    }
+
+    fig1 = go.Figure()
+    for group in ['As expected', 'Deprived and high crime',
+                  'Affluent but high crime', 'Deprived but low crime']:
+        subset = borough_dep[borough_dep['dominant_outlier'] == group]
+        if subset.empty:
+            continue
+        fig1.add_trace(go.Scatter(
+            x=subset['avg_imd_score'],
+            y=subset['avg_crime_rate'],
+            mode='markers+text',
+            name=group,
+            text=subset['borough'],
+            textposition='top center',
+            textfont=dict(size=9, color='rgba(255,255,255,0.7)'),
+            marker=dict(
+                color=color_map[group],
+                size=subset['total_lsoas'] / 8,
+                opacity=0.8,
+                line=dict(color='white', width=0.5)
+            ),
+            hovertemplate=(
+                '<b>%{text}</b><br>'
+                'Avg deprivation score: %{x:.1f}<br>'
+                'Avg crime rate: %{y:.0f} per 1,000<br>'
+                'Outlier LSOAs: %{customdata[0]} (%{customdata[1]:.1f}%)'
+                '<extra></extra>'
+            ),
+            customdata=subset[['pct_outlier', 'pct_outlier']].values
+        ))
+
+    fig1.update_layout(
+        height=520,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(
+            title='Average deprivation score (higher = more deprived)',
+            showspikes=False,
+            gridcolor='rgba(255,255,255,0.05)'
+        ),
+        yaxis=dict(
+            title='Average crime rate per 1,000 residents',
+            showspikes=False,
+            gridcolor='rgba(255,255,255,0.05)'
+        ),
+        hovermode='closest',
+        dragmode=False,
+        legend=dict(orientation='h', yanchor='bottom', y=1.02)
     )
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig1, use_container_width=True, config=CHART_CONFIG)
+
+    top_affluent_borough = borough_dep.sort_values(
+        'affluent_high', ascending=False
+    ).iloc[0]
+    top_deprived_borough = borough_dep.sort_values(
+        'avg_residual', ascending=False
+    ).iloc[0]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**🟠 {top_affluent_borough['borough']} — affluent but very high crime**")
+        st.markdown(f"""
+        {top_affluent_borough['borough']} has an average deprivation score of 
+        {top_affluent_borough['avg_imd_score']:.1f} — relatively low — yet records 
+        {top_affluent_borough['avg_crime_rate']:.0f} crimes per 1,000 residents, 
+        far above what its deprivation level would predict. 
+
+        {top_affluent_borough['affluent_high']} of its LSOAs are flagged as 
+        affluent but high crime outliers. These are tourist and retail zones where 
+        crime follows footfall — millions of visitors create high-volume theft and 
+        anti-social behaviour regardless of local poverty levels.
+        """)
+    with col2:
+        st.markdown(f"**🔴 {top_deprived_borough['borough']} — deprived and high crime**")
+        st.markdown(f"""
+        {top_deprived_borough['borough']} sits at the other extreme — high 
+        deprivation score of {top_deprived_borough['avg_imd_score']:.1f} combined 
+        with {top_deprived_borough['avg_crime_rate']:.0f} crimes per 1,000 
+        residents. 
+
+        {top_deprived_borough['deprived_high']} of its LSOAs are flagged as 
+        deprived and high crime — areas where poverty and crime reinforce each 
+        other, and where the cost of living crisis has hit hardest.
+        """)
+
+    st.divider()
+
+        # ── Finding 2: Domain-crime heatmap ──
+    st.subheader("2. Which type of deprivation drives which crime?")
+    st.markdown("""
+    Overall deprivation masks important differences between its components. 
+    Income deprivation, poor housing conditions, barriers to services, and 
+    health deprivation all affect crime — but in very different ways depending 
+    on the crime type.
+    """)
+
+    heatmap_pivot = domain_corr.pivot(
+        index='deprivation_domain',
+        columns='crime_type',
+        values='correlation'
+    )
+
+    # Mask non-significant values
+    sig_pivot = domain_corr.pivot(
+        index='deprivation_domain',
+        columns='crime_type',
+        values='significant'
+    )
+
+    fig2 = go.Figure(data=go.Heatmap(
+        z=heatmap_pivot.values,
+        x=heatmap_pivot.columns.tolist(),
+        y=heatmap_pivot.index.tolist(),
+        colorscale='RdYlGn',
+        zmid=0,
+        zmin=-0.2,
+        zmax=0.5,
+        text=heatmap_pivot.round(2).values,
+        texttemplate='%{text}',
+        hovertemplate=(
+            '<b>%{y}</b> → <b>%{x}</b><br>'
+            'Correlation: %{z:.3f}'
+            '<extra></extra>'
+        ),
+        showscale=True,
+        colorbar=dict(
+            title='Correlation',
+            tickvals=[-0.2, 0, 0.2, 0.4],
+            ticktext=['−0.2', '0', '0.2', '0.4']
+        )
+    ))
+
+    fig2.update_layout(
+        height=380,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(
+            title='',
+            side='bottom',
+            tickangle=-20,
+            showspikes=False
+        ),
+        yaxis=dict(
+            title='Deprivation domain',
+            showspikes=False
+        ),
+        hovermode='closest',
+        dragmode=False,
+        margin=dict(l=140, b=100)
+    )
+    st.plotly_chart(fig2, use_container_width=True, config=CHART_CONFIG)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**🏚️ Living environment drives burglary and robbery**")
+        living_burg = domain_corr[
+            (domain_corr['crime_type'] == 'Burglary') &
+            (domain_corr['deprivation_domain'] == 'Living Env')
+            ]['correlation'].values[0]
+        st.markdown(f"""
+        The strongest relationship in the entire dataset is between living 
+        environment deprivation and burglary (r={living_burg:.2f}). Poor street 
+        lighting, run-down housing, lack of natural surveillance — these 
+        physical conditions create opportunity regardless of income levels. 
+        Robbery shows an almost identical pattern.
+        """)
+    with col2:
+        st.markdown("**💷 Income and employment drive violence and drugs**")
+        income_violence = domain_corr[
+            (domain_corr['crime_type'] == 'Violence And Sexual Offences') &
+            (domain_corr['deprivation_domain'] == 'Income')
+            ]['correlation'].values[0]
+        st.markdown(f"""
+        Violence and drug offences are most strongly predicted by income and 
+        employment deprivation (r={income_violence:.2f}). These are the crimes 
+        most directly linked to financial desperation and the street economy — 
+        areas with higher unemployment and lower incomes see significantly more 
+        of both.
+        """)
+    with col3:
+        st.markdown("**🛒 Shoplifting is predicted by almost nothing**")
+        st.markdown(f"""
+        Shoplifting shows near-zero correlation with income (r={shop_income_corr:.3f}), 
+        employment, health, and barriers to services. The only weak signal comes 
+        from living environment (r={shop_max_corr['correlation']:.2f}).
+
+        This reinforces the economic crime analysis: shoplifting is no longer 
+        concentrated in deprived areas. It has become a cross-demographic 
+        response to the cost of living crisis, happening in wealthy high streets 
+        as much as deprived ones.
+        """)
+
+    st.divider()
+
+    # ── Finding 3: Borough map ──
+    st.subheader("3. Where are the outlier boroughs?")
+    st.markdown("""
+        The map shows each borough coloured by whether it has more deprived-and-high-crime 
+        or affluent-and-high-crime outlier areas. Size reflects the proportion of 
+        outlier LSOAs within the borough.
+        """)
+
+    map_data = borough_dep[borough_dep['dominant_outlier'] != 'As expected'].copy()
+    map_data['size'] = (map_data['pct_outlier'] * 3).clip(lower=8)
+
+    fig3 = px.scatter_mapbox(
+        map_data,
+        lat='latitude',
+        lon='longitude',
+        color='dominant_outlier',
+        color_discrete_map={
+            'Deprived and high crime': '#e74c3c',
+            'Affluent but high crime': '#e67e22',
+            'Deprived but low crime': '#2ecc71'
+        },
+        size='size',
+        size_max=30,
+        hover_name='borough',
+        hover_data={
+            'avg_imd_score': ':.1f',
+            'avg_crime_rate': ':.0f',
+            'pct_outlier': ':.1f',
+            'latitude': False,
+            'longitude': False,
+            'dominant_outlier': False,
+            'size': False
+        },
+        labels={
+            'avg_imd_score': 'Avg deprivation score',
+            'avg_crime_rate': 'Avg crime rate per 1,000',
+            'pct_outlier': '% outlier LSOAs'
+        },
+        zoom=9,
+        center=dict(lat=51.509, lon=-0.118),
+        mapbox_style='carto-darkmatter',
+        height=500
+    )
+    fig3.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=0, b=0),
+        dragmode=False,
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            title=''
+        )
+    )
+    st.plotly_chart(fig3, use_container_width=True, config=CHART_CONFIG)
+
+
+
+    st.caption("""
+    Source: Metropolitan Police & City of London Police via police.uk | 
+    Deprivation: Ministry of Housing, Communities & Local Government, 
+    English Indices of Deprivation 2019 | 
+    Outliers defined as areas with residuals >1.5 standard deviations 
+    from the deprivation-crime regression line
+    """)
 
 # ═══════════════════════════════════════════════════════════════════
 # 4. POLICING RESPONSE
