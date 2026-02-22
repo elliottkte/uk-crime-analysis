@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 .idea/
 notebooks/.ipynb_checkpoints/
+models/
+data/processed/
