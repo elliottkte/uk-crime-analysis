@@ -77,7 +77,7 @@ years and are excluded from the joined dataset where codes don't align.
 ## About
 
 I'm a data analyst with a background spanning policing, defence, and 
-government. This project was partly motivated by that experience — I 
+government. This project was partly motivated by that experience. I 
 wanted to explore what the publicly available data actually shows about 
 crime and deprivation in London, using proper analytical methods rather 
 than headlines.
