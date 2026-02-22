@@ -79,7 +79,7 @@ years and are excluded from the joined dataset where codes don't align.
 I'm a data analyst with a background spanning policing, defence, and 
 government. This project was partly motivated by that experience. I 
 wanted to explore what the publicly available data actually shows about 
-crime and deprivation in London, using proper analytical methods rather 
+crime and deprivation in London, using analytical methods rather 
 than headlines.
 
 [LinkedIn](https://www.linkedin.com/in/kate-elliott/)
