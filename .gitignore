@@ -1,8 +1,14 @@
-.venv/
+# Data
 data/raw/
+data/processed/
+models/
+
+# Python
+.venv/
 __pycache__/
 *.pyc
+*.pkl
+
+# IDE
 .idea/
-notebooks/.ipynb_checkpoints/
-models/
-data/processed/
+.vscode/
