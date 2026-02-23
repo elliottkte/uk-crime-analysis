@@ -1,7 +1,6 @@
 # Data
 data/raw/
 data/processed/
-models/
 
 # Python
 .venv/
