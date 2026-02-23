@@ -4,6 +4,12 @@ sections/economic_crime.py
 'Economic Crime' section — shoplifting vs food inflation, lag
 correlations, seasonal decomposition, drugs changepoint, and
 borough-level shoplifting trends.
+
+Changes from original:
+  - Best lag and CI bounds loaded from shoplifting_lag_correlations.csv
+    (now contains ci_lower, ci_upper, n columns from bootstrap).
+    Narrative presents uncertainty rather than asserting a flat figure.
+  - Decomposition chart title updated to reflect STL method.
 """
 
 import pandas as pd
@@ -49,11 +55,12 @@ def render():
     borough     = data["borough"]
     food        = data["food"]
 
-    # ── Derive narrative values ───────────────────────────────────
-    best_lag    = lag_df.loc[lag_df["r"].abs().idxmax()]
-    cp_date     = pd.to_datetime(changepoint["change_point_date"].values[0])
-    before_mean = float(changepoint["mean_before"].values[0])
-    after_mean  = float(changepoint["mean_after"].values[0])
+    # ── Derive best lag with CI ───────────────────────────────────
+    best_lag = _get_best_lag(lag_df)
+
+    cp_date      = pd.to_datetime(changepoint["change_point_date"].values[0])
+    before_mean  = float(changepoint["mean_before"].values[0])
+    after_mean   = float(changepoint["mean_after"].values[0])
     pct_increase = round((after_mean - before_mean) / before_mean * 100, 1)
 
     decomp_clean   = decomp.dropna(subset=["trend"])
@@ -84,7 +91,7 @@ def render():
     col3.metric(
         "Shoplifting underlying trend increase",
         f"+{trend_increase:.1f}%",
-        "Seasonal patterns removed",
+        "Seasonal patterns removed (STL)",
         delta_color="off",
     )
 
@@ -125,9 +132,65 @@ def render():
     st.caption("""
     Source: Metropolitan Police & City of London Police via police.uk |
     Food inflation: ONS CPI series D7G8 |
-    Trend: Additive seasonal decomposition |
+    Trend: STL decomposition (robust=True, period=12) |
+    Lag correlations: Pearson r with 95% bootstrap CI (1,000 iterations) |
     Deprivation: MHCLG English Indices of Deprivation 2019
     """)
+
+
+# ── Helpers ───────────────────────────────────────────────────────
+
+def _get_best_lag(lag_df: pd.DataFrame) -> pd.Series:
+    """
+    Extract the best lag row from the lag correlations DataFrame.
+
+    The updated lag_df has a 'best_lag' boolean column set by script 02.
+    Falls back to abs(r) idxmax if that column is absent (compatibility
+    with old pipeline outputs).
+
+    Returns the best lag row as a Series.
+    """
+    if "best_lag" in lag_df.columns:
+        best_rows = lag_df[lag_df["best_lag"] == True]
+        if not best_rows.empty:
+            return best_rows.iloc[0]
+
+    # Fallback for old outputs without best_lag column
+    valid = lag_df.dropna(subset=["r"])
+    if valid.empty:
+        return lag_df.iloc[0]
+    return valid.loc[valid["r"].abs().idxmax()]
+
+
+def _format_lag_narrative(best_lag: pd.Series) -> str:
+    """
+    Build the lag narrative string with CI if available,
+    or a simpler string if bootstrapped columns are absent.
+    """
+    lag_months = int(best_lag["lag_months"]) if "lag_months" in best_lag.index else int(best_lag["lag"])
+    r_val      = best_lag.get("r", best_lag.get("r", float("nan")))
+    n_val      = best_lag.get("n", None)
+
+    has_ci = (
+        "ci_lower" in best_lag.index
+        and "ci_upper" in best_lag.index
+        and pd.notna(best_lag["ci_lower"])
+        and pd.notna(best_lag["ci_upper"])
+    )
+
+    if has_ci:
+        ci_lower = best_lag["ci_lower"]
+        ci_upper = best_lag["ci_upper"]
+        n_str    = f", n={int(n_val)}" if n_val is not None else ""
+        return (
+            f"a **{lag_months} month lag** (r={r_val:.2f}, "
+            f"95% CI: {ci_lower:.2f}–{ci_upper:.2f}{n_str}). "
+            f"The wide confidence interval reflects the limited sample "
+            f"size (~36 months of data), so this lag estimate should be "
+            f"treated as indicative rather than precise."
+        )
+    else:
+        return f"roughly a **{lag_months} month delay**."
 
 
 # ── Sub-renderers ─────────────────────────────────────────────────
@@ -176,7 +239,6 @@ def _render_crime_index_chart(indexed: pd.DataFrame):
         y=0, line_dash="dash", line_color="white",
         opacity=0.3, annotation_text="No change from Jan 2023",
     )
-    # Lines only — labels omitted to avoid crowding
     fig = add_economic_annotations(
         fig, indexed["index_value"].max() - 100, show_all=False
     )
@@ -202,8 +264,8 @@ def _render_shoplifting_inflation_chart(
     """)
 
     monthly_shop = monthly_shop.copy()
-    merged     = monthly_shop.merge(food, on="month", how="inner")
-    inflection = merged[merged["food_inflation"] < 5].iloc[0]
+    merged       = monthly_shop.merge(food, on="month", how="inner")
+    inflection   = merged[merged["food_inflation"] < 5].iloc[0]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -252,6 +314,8 @@ def _render_shoplifting_inflation_chart(
 
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
+    lag_text = _format_lag_narrative(best_lag)
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**Why didn't shoplifting fall when prices eased?**")
@@ -261,11 +325,10 @@ def _render_shoplifting_inflation_chart(
         households remained in financial deficit from years of wages failing
         to keep pace.
 
-        The data shows shoplifting responds to food price changes with roughly
-        a **{int(best_lag['lag_months'])} month delay**. Financial damage takes
-        several months to feed through into crime behaviour. By the time
-        inflation eased in mid-2024, many households had already exhausted
-        their savings and credit.
+        The data shows shoplifting responds to food price changes with
+        {lag_text} Financial damage takes several months to feed through into
+        crime behaviour. By the time inflation eased in mid-2024, many
+        households had already exhausted their savings and credit.
         """)
     with col2:
         st.markdown("**What does rising food inflation in 2025 mean?**")
@@ -289,7 +352,9 @@ def _render_decomposition_chart(decomp_clean: pd.DataFrame, trend_increase: floa
     predictable fluctuations mathematically.
 
     The chart shows raw monthly figures in grey and the underlying trend in
-    red, with seasonal variation removed.
+    red, with seasonal variation removed. Decomposition uses STL (Seasonal
+    and Trend decomposition using LOESS) with robust fitting, which
+    downweights outlier months during estimation.
     """)
 
     decomp_trimmed = decomp_clean[decomp_clean["month"] >= "2023-07-01"].copy()
@@ -307,7 +372,7 @@ def _render_decomposition_chart(decomp_clean: pd.DataFrame, trend_increase: floa
     fig.add_trace(go.Scatter(
         x=decomp_trimmed["month"],
         y=decomp_trimmed["trend"],
-        name="Underlying trend",
+        name="Underlying trend (STL)",
         line=dict(color="#e74c3c", width=3),
         hovertemplate="%{x|%b %Y}: %{y:,.0f} trend<extra></extra>",
     ))
@@ -325,8 +390,8 @@ def _render_decomposition_chart(decomp_clean: pd.DataFrame, trend_increase: floa
     the genuine structural increase, separate from seasonal patterns. The
     trend shows no sign of reversing even as inflation eased in 2024,
     consistent with cumulative financial damage rather than a short-term
-    price shock. Trend data begins in mid-2023 as seasonal decomposition
-    requires several months of data to initialise.
+    price shock. Trend data begins in mid-2023 as STL decomposition requires
+    several months to initialise reliable estimates.
     """)
 
 
@@ -341,7 +406,8 @@ def _render_drugs_changepoint_chart(
     st.markdown(f"""
     Unlike shoplifting, drug offences did not creep upward. They were broadly
     flat for 18 months, then jumped sharply in **{cp_date.strftime('%B %Y')}**
-    and have remained at that higher level since.
+    and have remained at that higher level since. The Policing Response section
+    tests competing explanations for this jump against the stop and search data.
     """)
 
     monthly_drugs = monthly_drugs.copy()
@@ -390,17 +456,19 @@ def _render_drugs_changepoint_chart(
 
         A sudden, sustained jump of this kind is more consistent with a
         deliberate operational decision than a change in underlying drug
-        activity. The Policing section tests this interpretation directly
-        against stop and search data.
+        activity. The Policing Response section tests this interpretation
+        directly using a hypothesis table that shows what each competing
+        explanation predicts and whether the stop and search data supports it.
         """)
     with col2:
         st.markdown("**Does more recorded drug crime mean more drugs?**")
         st.markdown("""
         Not necessarily. Recorded drug offences increase when police actively
-        search for them through targeted operations and stop and search. The
-        Policing section shows drug stop and search volumes were flat around
-        this period, which supports the interpretation that the jump reflects
-        changed recording practice rather than changed drug activity.
+        search for them through targeted operations and stop and search. If
+        drug search volumes did not rise alongside recorded offences, that
+        would suggest changed recording practice rather than changed drug
+        activity. The Policing section examines this directly. Look at the
+        hypothesis table there before drawing conclusions from this chart.
         """)
 
 

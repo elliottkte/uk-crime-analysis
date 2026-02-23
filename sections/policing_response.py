@@ -3,6 +3,14 @@ sections/policing_response.py
 -----------------------------
 'Policing Response' section — stop and search ethnicity breakdown,
 effectiveness by search type, drugs comparison, and borough map.
+
+Changes from original:
+  - Inline correlation values (r=-0.62, r=0.79) now loaded from
+    ss_narrative_stats.csv rather than hardcoded in strings.
+    Falls back gracefully to "not available" if file is absent.
+  - Drugs section now shows the changepoint hypothesis table from
+    ss_changepoint_hypotheses.csv alongside narrative interpretation,
+    letting readers evaluate evidence rather than being told conclusion.
 """
 
 import pandas as pd
@@ -17,7 +25,7 @@ from utils.constants import (
     LONDON_MAP_ZOOM,
     MAPBOX_STYLE,
 )
-from utils.data_loaders import load_policing_data
+from utils.data_loaders import load_policing_data, get_narrative_stat
 from utils.helpers import get_ethnicity_val
 
 
@@ -31,22 +39,28 @@ def render():
 
     data = load_policing_data()
 
-    outcomes_summary   = data["outcomes_summary"]
-    ethnicity          = data["ethnicity"]
-    outcomes_by_search = data["outcomes_by_search"]
-    ss_borough         = data["ss_borough"]
-    drugs_comparison   = data["drugs_comparison"]
+    outcomes_summary       = data["outcomes_summary"]
+    ethnicity              = data["ethnicity"]
+    outcomes_by_search     = data["outcomes_by_search"]
+    ss_borough             = data["ss_borough"]
+    drugs_comparison       = data["drugs_comparison"]
+    narrative_stats        = data["narrative_stats"]
+    changepoint_hypotheses = data["changepoint_hypotheses"]
 
     # ── Derived values ────────────────────────────────────────────
-    total_searches  = int(outcomes_summary["total"].values[0])
-    arrest_rate     = float(outcomes_summary["arrest_rate"].values[0])
-    no_action_rate  = float(outcomes_summary["no_action_rate"].values[0])
+    total_searches = int(outcomes_summary["total"].values[0])
+    arrest_rate    = float(outcomes_summary["arrest_rate"].values[0])
+    no_action_rate = float(outcomes_summary["no_action_rate"].values[0])
 
     black_ratio       = get_ethnicity_val(ethnicity, "Black", "stop_rate_ratio")
     black_stop_pct    = get_ethnicity_val(ethnicity, "Black", "stop_pct")
     black_pop_pct     = get_ethnicity_val(ethnicity, "Black", "population_pct")
     black_arrest_rate = get_ethnicity_val(ethnicity, "Black", "arrest_rate")
     white_arrest_rate = get_ethnicity_val(ethnicity, "White", "arrest_rate")
+
+    # Load data-derived narrative statistics
+    r_dep_black    = get_narrative_stat(narrative_stats, "deprivation_black_stop_correlation")
+    r_crime_search = get_narrative_stat(narrative_stats, "crime_rate_search_volume_correlation")
 
     cp_date         = pd.to_datetime("2024-08-01")
     before_searches = drugs_comparison[drugs_comparison["month"] <  cp_date]["drug_searches"].mean()
@@ -55,7 +69,6 @@ def render():
     top_borough            = ss_borough.nlargest(1, "total_searches").iloc[0]
     highest_arrest_borough = ss_borough.nlargest(1, "arrest_rate").iloc[0]
 
-    # Drug searches as % of total — derived from data
     drug_rows = outcomes_by_search[
         outcomes_by_search["object_of_search"]
         .str.lower().str.contains("drug", na=False)
@@ -82,44 +95,54 @@ def render():
 
     # ── 1. Who is being stopped ───────────────────────────────────
     _render_ethnicity_chart(
-        ethnicity, black_pop_pct, black_stop_pct,
+        ethnicity,
+        black_pop_pct, black_stop_pct,
         black_ratio, black_arrest_rate, white_arrest_rate,
+        r_dep_black,
     )
 
     st.divider()
 
     # ── 2. Effectiveness ──────────────────────────────────────────
     _render_effectiveness_chart(
-        outcomes_by_search, arrest_rate, total_searches, drug_search_pct
+        outcomes_by_search, arrest_rate, total_searches, drug_search_pct,
+        r_crime_search,
     )
 
     st.divider()
 
     # ── 3. Drug searches vs drug crimes ──────────────────────────
     _render_drugs_comparison_chart(
-        drugs_comparison, cp_date, before_searches, after_searches
+        drugs_comparison, cp_date,
+        before_searches, after_searches,
+        changepoint_hypotheses,
     )
 
     st.divider()
 
     # ── 4. Borough map ────────────────────────────────────────────
-    _render_borough_map(ss_borough, top_borough, highest_arrest_borough)
+    _render_borough_map(ss_borough, top_borough, highest_arrest_borough, r_crime_search)
 
     st.caption("""
     Source: Metropolitan Police & City of London Police stop and search data
     via police.uk, 2023 to 2025 |
-    Population figures: ONS Census 2021 |
+    Population figures: ONS Census 2021. Note: Metropolitan Police records
+    four broad ethnicity categories (Asian, Black, White, Other). The ONS
+    Mixed category (5.7% of London population) is combined with Other in
+    all comparisons to match the recorded data. |
     Borough assignment based on nearest centroid from GPS coordinates |
     24,142 records (5.9%) had no GPS coordinates and could not be assigned
-    to a borough
+    to a borough.
     """)
 
 
 # ── Sub-renderers ─────────────────────────────────────────────────
 
 def _render_ethnicity_chart(
-    ethnicity, black_pop_pct, black_stop_pct,
+    ethnicity,
+    black_pop_pct, black_stop_pct,
     black_ratio, black_arrest_rate, white_arrest_rate,
+    r_dep_black: float,
 ):
     st.subheader("1. Who is being stopped?")
     st.markdown("""
@@ -152,6 +175,12 @@ def _render_ethnicity_chart(
 
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
+    # Format the deprivation correlation for display
+    if not _is_nan(r_dep_black):
+        dep_corr_text = f"r={r_dep_black:.2f}"
+    else:
+        dep_corr_text = "r not available — rerun scripts 03 and 06"
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**The disparity in numbers**")
@@ -164,8 +193,8 @@ def _render_ethnicity_chart(
         The disparity is consistent across the three year period and is not
         explained by deprivation. Boroughs with higher Black stop percentages
         are spread across all deprivation levels. The correlation between
-        deprivation and Black stop percentage is r=-0.62, meaning the disparity
-        is actually higher in wealthier boroughs.
+        deprivation and Black stop percentage is {dep_corr_text}, meaning the
+        disparity is actually higher in wealthier boroughs.
         """)
     with col2:
         st.markdown("**Does the disparity produce results?**")
@@ -183,7 +212,8 @@ def _render_ethnicity_chart(
 
 
 def _render_effectiveness_chart(
-    outcomes_by_search, arrest_rate, total_searches, drug_search_pct
+    outcomes_by_search, arrest_rate, total_searches, drug_search_pct,
+    r_crime_search: float,
 ):
     st.subheader("2. Is stop and search an effective tool?")
     st.markdown(f"""
@@ -228,6 +258,12 @@ def _render_effectiveness_chart(
 
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
+    # Format crime-search correlation for display
+    if not _is_nan(r_crime_search):
+        search_corr_text = f"r={r_crime_search:.2f}"
+    else:
+        search_corr_text = "r not available — rerun scripts 03 and 06"
+
     st.markdown(f"""
     Searches for stolen goods (24.3%) and evidence of offences (21.6%) have
     the highest arrest rates. These are targeted, intelligence-led searches
@@ -235,17 +271,23 @@ def _render_effectiveness_chart(
     approximately {drug_search_pct}% of all stops but result in arrest only
     13.2% of the time, below the overall average. Fireworks searches at 4.4%
     are the least productive.
+
+    Search volume correlates with crime rate across boroughs at {search_corr_text},
+    meaning police are broadly concentrating searches where crime is highest.
     """)
 
 
 def _render_drugs_comparison_chart(
-    drugs_comparison, cp_date, before_searches, after_searches
+    drugs_comparison, cp_date,
+    before_searches, after_searches,
+    changepoint_hypotheses: pd.DataFrame,
 ):
     st.subheader("3. Drug searches did not drive the August 2024 crime spike")
     st.markdown("""
     The Economic Crime section identified a sudden and sustained increase in
     recorded drug offences from August 2024. The stop and search data helps
-    clarify what happened.
+    clarify what happened. Three competing hypotheses are tested below against
+    observable implications in the data.
     """)
 
     fig = go.Figure()
@@ -284,9 +326,39 @@ def _render_drugs_comparison_chart(
 
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
+    # ── Hypothesis table ──────────────────────────────────────────
+    if not changepoint_hypotheses.empty:
+        st.markdown("**What does the data say about each explanation?**")
+        st.markdown("""
+        Each hypothesis makes a different prediction. The table shows the
+        relevant metric before and after the August 2024 changepoint so you
+        can evaluate the evidence directly.
+        """)
+
+        display_cols = ["hypothesis", "metric", "before", "after", "supports"]
+        display_df   = changepoint_hypotheses[
+            [c for c in display_cols if c in changepoint_hypotheses.columns]
+        ].copy()
+        display_df.columns = [c.replace("_", " ").title() for c in display_df.columns]
+
+        st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+        st.markdown("""
+        If the 'Changed recording practice' row shows arrest rate falling
+        after the changepoint while search volumes stayed flat, this is the
+        strongest evidence for a reclassification explanation. If 'More
+        enforcement activity' shows a large rise in monthly searches, that
+        interpretation gains more support.
+        """)
+    else:
+        st.info(
+            "Hypothesis table not available. Run scripts 02 and 06 in sequence "
+            "to generate ss_changepoint_hypotheses.csv."
+        )
+
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**Search volumes stayed flat**")
+        st.markdown("**Search volumes in numbers**")
         st.markdown(f"""
         Drug stop and searches averaged {before_searches:,.0f} per month
         before August 2024 and {after_searches:,.0f} per month afterwards,
@@ -308,7 +380,10 @@ def _render_drugs_comparison_chart(
         """)
 
 
-def _render_borough_map(ss_borough, top_borough, highest_arrest_borough):
+def _render_borough_map(
+    ss_borough, top_borough, highest_arrest_borough,
+    r_crime_search: float,
+):
     st.subheader("4. Where is stop and search concentrated?")
     st.markdown("""
     Stop and search is not evenly distributed across London. The map shows
@@ -351,6 +426,12 @@ def _render_borough_map(ss_borough, top_borough, highest_arrest_borough):
     )
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
+    # Format correlation for display
+    if not _is_nan(r_crime_search):
+        corr_text = f"r={r_crime_search:.2f}"
+    else:
+        corr_text = "r not available"
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(f"**{top_borough['borough']}: most searched borough**")
@@ -358,8 +439,8 @@ def _render_borough_map(ss_borough, top_borough, highest_arrest_borough):
         {top_borough['borough']} has the highest stop and search volume with
         {int(top_borough['total_searches']):,} searches over the period. This
         is consistent with its position as London's highest crime rate borough.
-        Search volume correlates with crime rate across all boroughs at r=0.79,
-        meaning police are broadly searching where crime is highest.
+        Search volume correlates with crime rate across all boroughs at
+        {corr_text}, meaning police are broadly searching where crime is highest.
         """)
     with col2:
         st.markdown(f"**{highest_arrest_borough['borough']}: most effective searches**")
@@ -370,3 +451,14 @@ def _render_borough_map(ss_borough, top_borough, highest_arrest_borough):
         relative to search volume suggest more intelligence-led, targeted
         activity rather than high-volume general stops.
         """)
+
+
+# ── Utility ───────────────────────────────────────────────────────
+
+def _is_nan(value: float) -> bool:
+    """Safe NaN check that works for both float NaN and numpy NaN."""
+    try:
+        import math
+        return math.isnan(value)
+    except (TypeError, ValueError):
+        return True

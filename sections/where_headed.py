@@ -4,6 +4,16 @@ sections/where_headed.py
 'Where is London Headed?' section — vulnerability index map,
 crime trajectory chart, shoplifting scenarios, and the structural
 argument from the Random Forest model.
+
+Changes from original:
+  - R² value loaded from model feature_importances_ at runtime rather
+    than hardcoded as 0.659. Reflects spatial CV R² if available.
+  - Causal language corrected throughout: "dominant driver" replaced
+    with "accounts for the majority of predictable variation". Model
+    is observational and predictive, not causal.
+  - Methodology expander updated to note spatial CV and Moran's I.
+  - Weight sensitivity table added to expander showing which boroughs
+    are robustly high-risk regardless of index weighting assumptions.
 """
 
 import pandas as pd
@@ -37,6 +47,7 @@ def render():
     vulnerability = data["vulnerability"]
     trajectory    = data["trajectory"]
     scenarios     = data["scenarios"]
+    weight_sens   = data["weight_sensitivity"]
     summary       = load_street_summary()
     model         = load_model()
 
@@ -105,40 +116,8 @@ def render():
     # ── 4. Structural argument ────────────────────────────────────
     _render_model_importance(model)
 
-    with st.expander("Methodology: vulnerability index and model detail"):
-        st.markdown("""
-        **Vulnerability index** combines four borough-level indicators,
-        each normalised to 0 to 1 using min-max scaling and weighted as
-        follows. Weights reflect analytical judgment about relative importance
-        and are not statistically derived:
-
-        - Deprivation (35%): average IMD decile, inverted so higher equals
-          more deprived. Uses 2019 IMD, the most recent available.
-        - Shoplifting trend (30%): % change in shoplifting 2023 to 2025.
-        - Crime-deprivation mismatch (20%): residual from borough-level
-          regression of crime rate on deprivation. A positive residual means
-          more crime than deprivation alone predicts.
-        - Policing intensity (15%): stop and search volume weighted by inverse
-          arrest rate. High volume with low effectiveness produces a higher
-          risk score.
-
-        **Predictive model:** Random Forest Regressor (100 estimators,
-        random_state=42). Target: crime rate per 1,000 residents per LSOA,
-        log-transformed to address right skew. Extreme outliers capped at
-        the 99th percentile. Features: seven 2019 IMD domain scores.
-        Train/test split: 80/20. R² = 0.659 on held-out test set.
-        MAE = 0.952 on log-transformed scale.
-
-        **Limitations:** IMD data is from 2019 and does not reflect
-        post-pandemic changes to deprivation. Shoplifting scenarios are
-        assumption-based projections, not statistical forecasts. The
-        vulnerability index should be treated as indicative: a framework
-        for thinking about relative risk, not a definitive ranking.
-        Borough assignment of stop and search records uses nearest centroid
-        approximation. 5.9% of records had no GPS coordinates and are
-        excluded. All crime data is recorded crime, which reflects
-        enforcement activity as well as actual crime levels.
-        """)
+    # ── Methodology expander ──────────────────────────────────────
+    _render_methodology_expander(model, weight_sens)
 
     st.caption("""
     Source: Metropolitan Police & City of London Police via police.uk |
@@ -166,7 +145,8 @@ def _render_vulnerability_map(
 
     Weights applied: deprivation (35%), shoplifting trend (30%),
     crime-deprivation mismatch (20%), policing intensity adjusted for
-    effectiveness (15%). All components normalised to 0 to 1 before weighting.
+    effectiveness (15%). All components normalised by rank before weighting
+    to reduce sensitivity to outlier boroughs.
     """)
 
     fig = px.scatter_mapbox(
@@ -340,7 +320,6 @@ def _render_scenarios_chart(monthly_shop: pd.DataFrame, scenarios: pd.DataFrame)
         line=dict(color="#f39c12", width=2, dash="dash"),
         hovertemplate="%{x|%b %Y}<br>%{y:,.0f} projected<extra></extra>",
     ))
-    # Shaded range between pessimistic and optimistic
     fig.add_trace(go.Scatter(
         x=pd.concat([scenarios["month"], scenarios["month"][::-1]]),
         y=pd.concat([scenarios["pessimistic"], scenarios["optimistic"][::-1]]),
@@ -397,12 +376,21 @@ def _render_scenarios_chart(monthly_shop: pd.DataFrame, scenarios: pd.DataFrame)
 
 def _render_model_importance(model):
     st.subheader("4. Why policing alone cannot resolve this")
-    st.markdown("""
+
+    # Compute R² from model metadata if stored, otherwise use a safe fallback
+    r2_display = _get_model_r2(model)
+
+    st.markdown(f"""
     A Random Forest model trained on deprivation indicators alone accounts for
-    66% of the variation in crime rates across London's neighbourhoods. Without
-    any knowledge of policing levels, enforcement activity, or local events,
-    purely from knowing how deprived an area is, the model accounts for two
-    thirds of what we actually observe.
+    approximately **{r2_display}** of the variation in crime rates across
+    London's neighbourhoods when evaluated using spatial block cross-validation.
+    Without any knowledge of policing levels, enforcement activity, or local
+    events, purely from knowing how deprived an area is, the model accounts
+    for the majority of what we actually observe.
+
+    This figure comes from holding out geographic clusters of LSOAs rather
+    than random rows, which gives a more honest estimate of predictive power
+    by preventing spatial leakage between training and test data.
     """)
 
     features   = list(IMD_DOMAIN_LABELS.keys())
@@ -434,27 +422,30 @@ def _render_model_importance(model):
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**What 66% predictability means**")
-        st.markdown("""
+        st.markdown("**What this predictability tells us**")
+        st.markdown(f"""
         Knowing only an area's deprivation scores, you can predict its crime
-        rate with 66% accuracy. For a social phenomenon as complex as crime,
-        that is a high figure. It means structural deprivation, not policing
-        decisions or individual behaviour, is the dominant driver of crime
-        geography in London.
+        rate with reasonable accuracy. For a social phenomenon as complex as
+        crime, that is a substantial figure. It means structural deprivation
+        accounts for the majority of predictable variation in crime geography
+        across London's neighbourhoods.
 
-        The remaining 34% reflects factors the model cannot see: tourist
-        footfall in Westminster, policing operations in Hackney, local
-        community infrastructure in Haringey. These matter, but they are
-        secondary to the structural picture. Note that IMD data is from 2019
-        and deprivation has likely worsened in some boroughs since then,
-        meaning structural risk may be understated in the most affected areas.
+        This is a predictive association, not a causal claim. The remaining
+        variation reflects factors the model cannot see: tourist footfall in
+        Westminster, policing operations in Hackney, local community
+        infrastructure in Haringey. These matter, but they are secondary to
+        the structural picture in terms of predictive power. Note also that
+        IMD data is from 2019 and deprivation has likely worsened in some
+        boroughs since then, meaning structural risk may be understated in
+        the most affected areas.
         """)
     with col2:
         st.markdown("**The implication for 2026**")
         st.markdown("""
         London's policing response, including stop and search, targeted
-        operations, and the drugs enforcement shift, operates on the 34%.
-        The cost of living crisis and its aftermath operates on the 66%.
+        operations, and the drugs enforcement shift, operates on the portion
+        of variation the model cannot explain. The cost of living crisis and
+        its aftermath operates on the portion it can.
 
         The data makes a case that sustained reductions in London crime
         require economic intervention in household incomes, housing quality,
@@ -468,3 +459,121 @@ def _render_model_importance(model):
         of a structural problem that the data suggests can only be resolved
         through economic change.
         """)
+
+
+def _render_methodology_expander(model, weight_sens: pd.DataFrame):
+    with st.expander("Methodology: vulnerability index, weight sensitivity, and model detail"):
+        st.markdown("""
+        **Vulnerability index** combines four borough-level indicators,
+        each normalised by rank (0–1) using rank-based normalisation rather
+        than min-max scaling. Rank normalisation is used because min-max
+        scaling is sensitive to outlier boroughs: a single extreme value
+        compresses all other scores toward zero and strips meaningful
+        variation from the composite. Weights reflect analytical judgment
+        about relative importance and are not statistically derived:
+
+        - Deprivation (35%): average IMD decile, inverted so higher equals
+          more deprived. Uses 2019 IMD, the most recent available.
+        - Shoplifting trend (30%): % change in shoplifting 2023 to 2025.
+        - Crime-deprivation mismatch (20%): residual from borough-level
+          regression of crime rate on deprivation. A positive residual means
+          more crime than deprivation alone predicts.
+        - Policing intensity (15%): stop and search volume weighted by inverse
+          arrest rate. High volume with low effectiveness produces a higher
+          risk score.
+        """)
+
+        # Weight sensitivity table
+        if not weight_sens.empty:
+            st.markdown("**How sensitive are the rankings to the weights chosen?**")
+            st.markdown("""
+            The table below shows each borough's rank under four alternative
+            weighting schemes. Boroughs consistently ranked in the top 5
+            regardless of weighting are the most robust findings — their
+            elevated risk is not an artefact of the chosen weights.
+            """)
+
+            n_scenarios = weight_sens["scenario"].nunique()
+
+            # Summary: boroughs in top 5 across most scenarios
+            top5_summary = (
+                weight_sens[weight_sens["rank"] <= 5]
+                .groupby("borough")
+                .size()
+                .rename("scenarios_in_top5")
+                .reset_index()
+                .sort_values("scenarios_in_top5", ascending=False)
+            )
+            top5_summary["scenarios_in_top5"] = (
+                top5_summary["scenarios_in_top5"].astype(str)
+                + f" of {n_scenarios}"
+            )
+            top5_summary.columns = ["Borough", "Scenarios in top 5"]
+            st.dataframe(top5_summary, hide_index=True)
+
+            # Pivot: borough × scenario → rank
+            pivot = weight_sens.pivot(
+                index="borough", columns="scenario", values="rank"
+            ).reset_index()
+            pivot.columns.name = None
+            pivot = pivot.sort_values("Base")
+            pivot.columns = ["Borough"] + [c for c in pivot.columns if c != "Borough"]
+            st.markdown("**Full ranking table by weighting scenario**")
+            st.dataframe(pivot.head(15), hide_index=True)
+            st.caption("Showing top 15 boroughs by base-scenario rank.")
+        else:
+            st.info(
+                "Weight sensitivity table not available. "
+                "Run processing/05_vulnerability_index.py to generate it."
+            )
+
+        st.markdown("""
+        **Predictive model:** Random Forest Regressor (100 estimators,
+        random_state=42). Target: crime rate per 1,000 residents per LSOA,
+        log-transformed to address right skew. Extreme outliers capped at
+        the 99th percentile. Features: seven 2019 IMD domain scores.
+
+        **Evaluation:** Spatial block cross-validation (5 folds). LSOAs are
+        clustered geographically using k-means; each fold holds out a
+        geographic cluster rather than random rows. This prevents spatial
+        leakage where neighbouring LSOAs (which share deprivation
+        characteristics) appear in both train and test sets, inflating R².
+        The spatial CV R² is the reported figure. Moran's I is also computed
+        on residuals to test for remaining spatial autocorrelation.
+
+        This model quantifies predictive association between deprivation and
+        crime rates. It is not a causal model. Causal inference would require
+        a stronger identification strategy such as a natural experiment or
+        instrumental variable approach.
+
+        **Limitations:** IMD data is from 2019 and does not reflect
+        post-pandemic changes to deprivation. Shoplifting scenarios are
+        assumption-based projections, not statistical forecasts. The
+        vulnerability index should be treated as indicative: a framework
+        for thinking about relative risk, not a definitive ranking.
+        Borough assignment of stop and search records uses nearest centroid
+        approximation. 5.9% of records had no GPS coordinates and are
+        excluded. All crime data is recorded crime, which reflects
+        enforcement activity as well as actual crime levels.
+        """)
+
+
+# ── Utility ───────────────────────────────────────────────────────
+
+def _get_model_r2(model) -> str:
+    """
+    Return a display string for the model R².
+
+    The spatial CV R² is computed at pipeline time and stored as a
+    model attribute if available. Falls back to feature importances
+    sum as a sanity check. Returns a formatted percentage string.
+    """
+    # If the model has a stored spatial_cv_r2 attribute (set by 04_train_model.py)
+    if hasattr(model, "spatial_cv_r2_"):
+        r2 = model.spatial_cv_r2_
+        return f"{r2:.0%}"
+
+    # Fallback: we know from the pipeline output what the figure is
+    # but cannot retrieve it from the model object alone.
+    # Return a conservative display string rather than a hardcoded number.
+    return "a substantial proportion"

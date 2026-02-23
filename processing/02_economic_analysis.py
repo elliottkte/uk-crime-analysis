@@ -4,6 +4,13 @@
 Reads street_clean.csv and raw ONS CPI food inflation data.
 Produces all outputs consumed by the Economic Crime section.
 
+Changes from original:
+  - Lag correlations now bootstrapped (1,000 iterations) with 95% CI
+  - Decomposition switched from additive seasonal_decompose to STL
+    (robust=True, handles short series and outliers better)
+  - build_borough_shoplifting_trend() has explicit assertions to catch
+    missing borough column early rather than producing silent duplicates
+
 Outputs:
     data/processed/crime_indexed.csv
     data/processed/food_inflation_ons.csv
@@ -22,7 +29,8 @@ import warnings
 import numpy as np
 import pandas as pd
 from scipy import stats
-from statsmodels.tsa.seasonal import seasonal_decompose
+from scipy.stats import pearsonr
+from statsmodels.tsa.seasonal import STL
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -51,9 +59,6 @@ def fetch_food_inflation_from_ons() -> pd.DataFrame:
     """
     Fetch D7G8 monthly series from the ONS generator CSV endpoint and cache
     to ONS_CPI_PATH so subsequent runs read from disk.
-
-    The old api.ons.gov.uk endpoint returns 403. The generator URL returns
-    the full time series CSV and requires a browser-like User-Agent header.
     """
     import urllib.request
 
@@ -83,16 +88,12 @@ def fetch_food_inflation_from_ons() -> pd.DataFrame:
             f"Save the file to: {ONS_CPI_PATH}"
         )
 
-    # The ONS CSV has several header rows then annual/quarterly/monthly data.
-    # We want only rows where the Period column matches 'YYYY MON' (monthly).
     rows = []
     for line in raw.splitlines():
         parts = line.strip().split(",")
         if len(parts) < 2:
             continue
         period, value = parts[0].strip().strip('"'), parts[1].strip().strip('"')
-        # Monthly rows look like "2023 JAN", "2023 FEB", etc.
-        # Annual rows are "2023", quarterly are "2023 Q1" — skip those
         tokens = period.split()
         if len(tokens) == 2 and len(tokens[0]) == 4 and tokens[0].isdigit() and len(tokens[1]) == 3:
             try:
@@ -110,7 +111,6 @@ def fetch_food_inflation_from_ons() -> pd.DataFrame:
     df["month"] = pd.to_datetime(df["month_str"], format="%Y %b", errors="coerce")
     df = df.dropna(subset=["month"]).sort_values("month").reset_index(drop=True)
 
-    # Cache to disk
     os.makedirs(os.path.dirname(ONS_CPI_PATH) or ".", exist_ok=True)
     df[["month_str", "food_inflation"]].to_csv(ONS_CPI_PATH, index=False, header=False)
     print(f"    Fetched {len(df)} monthly observations, saved to {ONS_CPI_PATH}")
@@ -119,10 +119,6 @@ def fetch_food_inflation_from_ons() -> pd.DataFrame:
 
 
 def load_food_inflation() -> pd.DataFrame:
-    """
-    Load ONS CPI series D7G8 (food and non-alcoholic beverages).
-    If the file doesn't exist, fetches it automatically from the ONS API.
-    """
     if not os.path.exists(ONS_CPI_PATH):
         print(f"    {ONS_CPI_PATH} not found — fetching from ONS API...")
         df = fetch_food_inflation_from_ons()
@@ -140,10 +136,6 @@ def load_food_inflation() -> pd.DataFrame:
 
 
 def load_imd_borough_lookup() -> pd.DataFrame:
-    """
-    Load IMD file and return LSOA->borough lookup.
-    Uses the actual column names from the raw file as seen in the notebook.
-    """
     imd = pd.read_csv(IMD_PATH)
     lookup = imd[[IMD_LSOA_COL, IMD_BOROUGH_COL]].rename(columns={
         IMD_LSOA_COL:    "lsoa_code",
@@ -195,29 +187,108 @@ def build_food_inflation_correlations(street: pd.DataFrame, food: pd.DataFrame) 
     return pd.DataFrame(rows).sort_values("correlation", ascending=False)
 
 
-# ── 3. Shoplifting lag correlations ──────────────────────────────
+# ── 3. Shoplifting lag correlations (bootstrapped) ───────────────
 
-def build_lag_correlations(street: pd.DataFrame, food: pd.DataFrame, max_lag: int = 12) -> pd.DataFrame:
+def bootstrap_lag_correlation(
+    food: pd.DataFrame,
+    shop: pd.DataFrame,
+    lag: int,
+    n_bootstrap: int = 1000,
+    random_state: int = 42,
+) -> dict:
+    """
+    Compute Pearson r between food inflation and lagged shoplifting,
+    with 95% bootstrap confidence interval.
+
+    Bootstrap resamples pairs (food[t], shop[t+lag]) with replacement.
+    Wide CIs reflect the limited sample size (~36 months).
+
+    Args:
+        food:         DataFrame with 'month' and 'food_inflation' columns.
+        shop:         DataFrame with 'month' and 'count' columns.
+        lag:          Number of months to lag shoplifting behind food inflation.
+        n_bootstrap:  Number of bootstrap iterations.
+        random_state: Seed for reproducibility.
+
+    Returns:
+        Dict with keys: lag, r, ci_lower, ci_upper, n.
+    """
+    rng = np.random.default_rng(random_state)
+
+    merged = shop.merge(food, on="month", how="inner").sort_values("month")
+    if len(merged) <= lag:
+        return {"lag": lag, "r": np.nan, "ci_lower": np.nan, "ci_upper": np.nan, "n": 0}
+
+    shop_lagged = merged["count"].iloc[lag:].reset_index(drop=True)
+    food_base   = merged["food_inflation"].iloc[:len(merged) - lag].reset_index(drop=True)
+
+    if len(shop_lagged) < 6:
+        return {"lag": lag, "r": np.nan, "ci_lower": np.nan, "ci_upper": np.nan, "n": len(shop_lagged)}
+
+    observed_r, _ = pearsonr(food_base, shop_lagged)
+
+    n = len(shop_lagged)
+    bootstrap_rs = []
+    for _ in range(n_bootstrap):
+        idx = rng.choice(n, n, replace=True)
+        r, _ = pearsonr(food_base.iloc[idx], shop_lagged.iloc[idx])
+        bootstrap_rs.append(r)
+
+    return {
+        "lag":      lag,
+        "r":        round(observed_r, 3),
+        "ci_lower": round(float(np.percentile(bootstrap_rs, 2.5)),  3),
+        "ci_upper": round(float(np.percentile(bootstrap_rs, 97.5)), 3),
+        "n":        n,
+    }
+
+
+def build_lag_correlations(
+    street: pd.DataFrame,
+    food: pd.DataFrame,
+    max_lag: int = 12,
+    n_bootstrap: int = 1000,
+) -> pd.DataFrame:
+    """
+    Build bootstrapped lag correlation table for shoplifting vs food inflation.
+    Each row includes the point estimate r and 95% bootstrap CI.
+    """
     monthly_shop = (
         street[street["crime_type"] == "Shoplifting"]
         .groupby("month").size()
         .reset_index(name="count")
     )
-    merged = monthly_shop.merge(food, on="month", how="inner").sort_values("month")
+
     rows = []
     for lag in range(0, max_lag + 1):
-        shop_lagged = merged["count"].iloc[lag:].reset_index(drop=True)
-        food_base   = merged["food_inflation"].iloc[:len(merged) - lag].reset_index(drop=True)
-        if len(shop_lagged) < 6:
-            continue
-        r, p = stats.pearsonr(food_base, shop_lagged)
-        rows.append({"lag_months": lag, "r": round(r, 3), "p_value": round(p, 4)})
-    return pd.DataFrame(rows)
+        result = bootstrap_lag_correlation(food, monthly_shop, lag, n_bootstrap)
+        rows.append(result)
+
+    df = pd.DataFrame(rows)
+    # Flag best lag by absolute r for easy downstream lookup
+    valid = df.dropna(subset=["r"])
+    if not valid.empty:
+        best_idx = valid["r"].abs().idxmax()
+        df["best_lag"] = False
+        df.loc[best_idx, "best_lag"] = True
+
+    return df
 
 
-# ── 4. Seasonal decomposition ─────────────────────────────────────
+# ── 4. Seasonal decomposition (STL) ──────────────────────────────
 
 def build_decomposition(street: pd.DataFrame) -> pd.DataFrame:
+    """
+    Decompose monthly shoplifting using STL (Seasonal-Trend decomposition
+    using LOESS). Advantages over additive seasonal_decompose:
+      - robust=True downweights outliers (important given drugs recording
+        spike in Aug 2024 which can influence adjacent series)
+      - Handles series as short as 2 full cycles (24 months) more reliably
+      - Trend estimates at the edges are more stable
+
+    Returns a DataFrame with columns:
+        month, observed, trend, seasonal, residual
+    """
     monthly = (
         street[street["crime_type"] == "Shoplifting"]
         .groupby("month").size()
@@ -225,16 +296,22 @@ def build_decomposition(street: pd.DataFrame) -> pd.DataFrame:
         .sort_values("month")
         .set_index("month")
     )
-    if len(monthly) < 24:
-        print("  WARNING: fewer than 24 months — decomposition may be unreliable")
-    decomp = seasonal_decompose(monthly["observed"], model="additive", period=12)
+
+    n_months = len(monthly)
+    if n_months < 24:
+        print(f"  WARNING: only {n_months} months of shoplifting data — "
+              "STL requires at least 24 for reliable decomposition")
+
+    stl    = STL(monthly["observed"], period=12, robust=True)
+    result = stl.fit()
+
     return pd.DataFrame({
         "month":    monthly.index,
         "observed": monthly["observed"].values,
-        "trend":    decomp.trend.values,
-        "seasonal": decomp.seasonal.values,
-        "residual": decomp.resid.values,
-    })
+        "trend":    result.trend,
+        "seasonal": result.seasonal,
+        "residual": result.resid,
+    }).reset_index(drop=True)
 
 
 # ── 5. Drugs changepoint ──────────────────────────────────────────
@@ -271,14 +348,23 @@ def build_drugs_changepoint(street: pd.DataFrame) -> pd.DataFrame:
 
 def build_borough_shoplifting_trend(street: pd.DataFrame, lookup: pd.DataFrame) -> pd.DataFrame:
     """
-    Uses borough column already attached to street data by attach_borough() in main().
-    lookup is only passed for the IMD decile join below.
+    Borough-level shoplifting trend 2023 vs 2025.
+
+    Asserts that borough column is already attached to street data by
+    attach_borough() in main() — fails loudly rather than producing
+    silent borough_x/borough_y duplicate columns.
     """
     shop = street[street["crime_type"] == "Shoplifting"].copy()
-    # borough is already on street from attach_borough() in main() — do not re-merge
-    # (re-merging creates borough_x/borough_y duplicates and loses the column)
-    if "borough" not in shop.columns:
-        shop = shop.merge(lookup[["lsoa_code", "borough"]], on="lsoa_code", how="left")
+
+    assert "borough" in shop.columns, (
+        "borough column missing from street data — "
+        "ensure attach_borough() was called before build_borough_shoplifting_trend()"
+    )
+    assert shop["borough"].notna().sum() > 0, (
+        "No borough values attached to street data — "
+        "check that lsoa_code values match between street_clean.csv and IMD file"
+    )
+
     shop = shop.dropna(subset=["borough"])
 
     annual = (
@@ -296,7 +382,7 @@ def build_borough_shoplifting_trend(street: pd.DataFrame, lookup: pd.DataFrame) 
     ).round(1)
     annual.rename(columns={2023: "count_2023", 2025: "count_2025"}, inplace=True)
 
-    # Attach avg IMD decile from IMD file
+    # Attach avg IMD decile
     try:
         imd = pd.read_csv(IMD_PATH)
         decile_col = [c for c in imd.columns if "decile" in c.lower() and "imd" in c.lower()]
@@ -346,24 +432,71 @@ def main():
 
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    steps = [
-        ("crime_indexed.csv",               build_crime_indexed,               (street,)),
-        ("food_inflation_ons.csv",           lambda f: f,                       (food,)),
-        ("food_inflation_correlations.csv",  build_food_inflation_correlations, (street, food)),
-        ("shoplifting_lag_correlations.csv", build_lag_correlations,            (street, food)),
-        ("shoplifting_decomposition.csv",    build_decomposition,               (street,)),
-        ("drugs_changepoint.csv",            build_drugs_changepoint,           (street,)),
-        ("borough_shoplifting_trend.csv",    build_borough_shoplifting_trend,   (street, lookup)),
-    ]
+    # ── crime_indexed ─────────────────────────────────────────────
+    print("  Building crime_indexed.csv...")
+    try:
+        df_out = build_crime_indexed(street)
+        df_out.to_csv(os.path.join(OUT_DIR, "crime_indexed.csv"), index=False)
+        print(f"    ✓ {len(df_out):,} rows")
+    except Exception as e:
+        print(f"    ERROR: {e}")
 
-    for filename, fn, args in steps:
-        print(f"  Building {filename}...")
-        try:
-            df_out = fn(*args)
-            df_out.to_csv(os.path.join(OUT_DIR, filename), index=False)
-            print(f"    ✓ {len(df_out):,} rows")
-        except Exception as e:
-            print(f"    ERROR: {e}")
+    # ── food_inflation_ons ────────────────────────────────────────
+    print("  Building food_inflation_ons.csv...")
+    try:
+        food.to_csv(os.path.join(OUT_DIR, "food_inflation_ons.csv"), index=False)
+        print(f"    ✓ {len(food):,} rows")
+    except Exception as e:
+        print(f"    ERROR: {e}")
+
+    # ── food_inflation_correlations ───────────────────────────────
+    print("  Building food_inflation_correlations.csv...")
+    try:
+        df_out = build_food_inflation_correlations(street, food)
+        df_out.to_csv(os.path.join(OUT_DIR, "food_inflation_correlations.csv"), index=False)
+        print(f"    ✓ {len(df_out):,} rows")
+    except Exception as e:
+        print(f"    ERROR: {e}")
+
+    # ── shoplifting_lag_correlations (bootstrapped) ───────────────
+    print("  Building shoplifting_lag_correlations.csv (bootstrapped, n=1000)...")
+    try:
+        df_out = build_lag_correlations(street, food, max_lag=12, n_bootstrap=1000)
+        df_out.to_csv(os.path.join(OUT_DIR, "shoplifting_lag_correlations.csv"), index=False)
+        best = df_out[df_out["best_lag"] == True].iloc[0]
+        print(
+            f"    ✓ {len(df_out):,} rows | best lag: {int(best['lag'])} months "
+            f"r={best['r']} (95% CI: {best['ci_lower']}–{best['ci_upper']}, n={int(best['n'])})"
+        )
+    except Exception as e:
+        print(f"    ERROR: {e}")
+
+    # ── shoplifting_decomposition (STL) ───────────────────────────
+    print("  Building shoplifting_decomposition.csv (STL, robust=True)...")
+    try:
+        df_out = build_decomposition(street)
+        df_out.to_csv(os.path.join(OUT_DIR, "shoplifting_decomposition.csv"), index=False)
+        print(f"    ✓ {len(df_out):,} rows")
+    except Exception as e:
+        print(f"    ERROR: {e}")
+
+    # ── drugs_changepoint ─────────────────────────────────────────
+    print("  Building drugs_changepoint.csv...")
+    try:
+        df_out = build_drugs_changepoint(street)
+        df_out.to_csv(os.path.join(OUT_DIR, "drugs_changepoint.csv"), index=False)
+        print(f"    ✓ {len(df_out):,} rows")
+    except Exception as e:
+        print(f"    ERROR: {e}")
+
+    # ── borough_shoplifting_trend ─────────────────────────────────
+    print("  Building borough_shoplifting_trend.csv...")
+    try:
+        df_out = build_borough_shoplifting_trend(street, lookup)
+        df_out.to_csv(os.path.join(OUT_DIR, "borough_shoplifting_trend.csv"), index=False)
+        print(f"    ✓ {len(df_out):,} rows")
+    except Exception as e:
+        print(f"    ERROR: {e}")
 
     print(f"\n✓ Economic analysis outputs written to {OUT_DIR}")
 

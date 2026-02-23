@@ -83,7 +83,7 @@ def load_modelling_data() -> pd.DataFrame:
         st.stop()
 
 
-# ── Street summary (replaces load_full_street for deployment) ────
+# ── Street summary (replaces load_full_street for deployment) ─────
 
 @st.cache_data
 def load_street_summary() -> dict:
@@ -92,10 +92,10 @@ def load_street_summary() -> dict:
     for dashboard rendering. These are small files suitable for git/deployment.
 
     Keys:
-        monthly_by_crime   – monthly counts per crime type
-        monthly_totals     – monthly total across all crimes
+        monthly_by_crime    – monthly counts per crime type
+        monthly_totals      – monthly total across all crimes
         crime_annual_change – crime type counts by year + % change
-        headline_totals    – scalar totals (total_crimes, date range)
+        headline_totals     – scalar totals (total_crimes, date range)
     """
     files = {
         "monthly_by_crime":    "monthly_by_crime.csv",
@@ -137,13 +137,15 @@ def load_economic_crime_data() -> dict:
     Returns a dict of DataFrames used by the Economic Crime section.
 
     Keys:
-        indexed         – crime_indexed.csv
-        corr_df         – food_inflation_correlations.csv
-        lag_df          – shoplifting_lag_correlations.csv
-        decomp          – shoplifting_decomposition.csv
-        changepoint     – drugs_changepoint.csv
-        borough         – borough_shoplifting_trend.csv
-        food            – food_inflation_ons.csv
+        indexed     – crime_indexed.csv
+        corr_df     – food_inflation_correlations.csv
+        lag_df      – shoplifting_lag_correlations.csv
+                      Now includes ci_lower, ci_upper, n, best_lag columns
+                      from bootstrapped correlation (script 02).
+        decomp      – shoplifting_decomposition.csv
+        changepoint – drugs_changepoint.csv
+        borough     – borough_shoplifting_trend.csv
+        food        – food_inflation_ons.csv
     """
     files = {
         "indexed":     "crime_indexed.csv",
@@ -161,7 +163,7 @@ def load_economic_crime_data() -> dict:
         "food":    "month",
     }
 
-    result = {}
+    result  = {}
     missing = []
 
     for key, filename in files.items():
@@ -194,8 +196,8 @@ def load_deprivation_data() -> dict:
     Returns a dict of DataFrames used by the Crime & Deprivation section.
 
     Keys:
-        domain_corr  – domain_crime_correlations.csv
-        borough_dep  – borough_outliers_deprivation.csv
+        domain_corr – domain_crime_correlations.csv
+        borough_dep – borough_outliers_deprivation.csv
     """
     files = {
         "domain_corr": "domain_crime_correlations.csv",
@@ -232,26 +234,39 @@ def load_policing_data() -> dict:
     Returns a dict of DataFrames used by the Policing Response section.
 
     Keys:
-        outcomes_summary    – ss_outcomes_summary.csv
-        ethnicity           – ss_ethnicity_comparison.csv
-        outcomes_by_search  – ss_outcomes_by_search.csv
-        ss_borough          – ss_borough_full.csv
-        drugs_comparison    – ss_drugs_comparison.csv
-        monthly_search_type – ss_monthly_search_type.csv
+        outcomes_summary       – ss_outcomes_summary.csv
+        ethnicity              – ss_ethnicity_comparison.csv
+        outcomes_by_search     – ss_outcomes_by_search.csv
+        ss_borough             – ss_borough_full.csv
+        drugs_comparison       – ss_drugs_comparison.csv
+        monthly_search_type    – ss_monthly_search_type.csv
+        narrative_stats        – ss_narrative_stats.csv
+                                 Contains data-derived inline statistics:
+                                 deprivation_black_stop_correlation,
+                                 crime_rate_search_volume_correlation
+        changepoint_hypotheses – ss_changepoint_hypotheses.csv
+                                 Three competing hypotheses for the Aug 2024
+                                 drugs spike with before/after metrics.
     """
     files = {
-        "outcomes_summary":    "ss_outcomes_summary.csv",
-        "ethnicity":           "ss_ethnicity_comparison.csv",
-        "outcomes_by_search":  "ss_outcomes_by_search.csv",
-        "ss_borough":          "ss_borough_full.csv",
-        "drugs_comparison":    "ss_drugs_comparison.csv",
-        "monthly_search_type": "ss_monthly_search_type.csv",
+        "outcomes_summary":       "ss_outcomes_summary.csv",
+        "ethnicity":              "ss_ethnicity_comparison.csv",
+        "outcomes_by_search":     "ss_outcomes_by_search.csv",
+        "ss_borough":             "ss_borough_full.csv",
+        "drugs_comparison":       "ss_drugs_comparison.csv",
+        "monthly_search_type":    "ss_monthly_search_type.csv",
+        "narrative_stats":        "ss_narrative_stats.csv",
+        "changepoint_hypotheses": "ss_changepoint_hypotheses.csv",
     }
 
     date_cols = {
         "drugs_comparison":    "month",
         "monthly_search_type": "month",
     }
+
+    # Files that are optional — generated only if upstream dependencies exist.
+    # If absent, the section uses fallback values rather than stopping.
+    optional = {"narrative_stats", "changepoint_hypotheses"}
 
     result  = {}
     missing = []
@@ -263,7 +278,10 @@ def load_policing_data() -> dict:
                 df[date_cols[key]] = pd.to_datetime(df[date_cols[key]])
             result[key] = df
         except FileNotFoundError:
-            missing.append(filename)
+            if key in optional:
+                result[key] = pd.DataFrame()
+            else:
+                missing.append(filename)
         except Exception as e:
             st.error(f"Could not load {filename}: {e}")
             st.stop()
@@ -286,19 +304,29 @@ def load_outlook_data() -> dict:
     Returns a dict of DataFrames used by the outlook section.
 
     Keys:
-        vulnerability  – borough_vulnerability.csv
-        trajectory     – crime_trajectory.csv
-        scenarios      – shoplifting_scenarios.csv
+        vulnerability      – borough_vulnerability.csv
+        trajectory         – crime_trajectory.csv
+        scenarios          – shoplifting_scenarios.csv
+        weight_sensitivity – borough_weight_sensitivity.csv
+                             Long DataFrame showing borough rankings across
+                             four alternative weighting schemes. Used in
+                             methodology expander to show which boroughs
+                             are robustly high-risk regardless of weights.
     """
     files = {
-        "vulnerability": "borough_vulnerability.csv",
-        "trajectory":    "crime_trajectory.csv",
-        "scenarios":     "shoplifting_scenarios.csv",
+        "vulnerability":      "borough_vulnerability.csv",
+        "trajectory":         "crime_trajectory.csv",
+        "scenarios":          "shoplifting_scenarios.csv",
+        "weight_sensitivity": "borough_weight_sensitivity.csv",
     }
 
     date_cols = {
         "scenarios": "month",
     }
+
+    # weight_sensitivity is optional — generated by script 05 but not
+    # strictly required for the section to render.
+    optional = {"weight_sensitivity"}
 
     result  = {}
     missing = []
@@ -310,7 +338,10 @@ def load_outlook_data() -> dict:
                 df[date_cols[key]] = pd.to_datetime(df[date_cols[key]])
             result[key] = df
         except FileNotFoundError:
-            missing.append(filename)
+            if key in optional:
+                result[key] = pd.DataFrame()
+            else:
+                missing.append(filename)
         except Exception as e:
             st.error(f"Could not load {filename}: {e}")
             st.stop()
@@ -323,3 +354,27 @@ def load_outlook_data() -> dict:
         st.stop()
 
     return result
+
+
+# ── Narrative stats helper ────────────────────────────────────────
+
+def get_narrative_stat(narrative_stats: pd.DataFrame, stat_name: str) -> float:
+    """
+    Retrieve a single value from the narrative_stats DataFrame by stat name.
+
+    Used by section renderers to inject data-derived statistics into
+    narrative text rather than hardcoding them.
+
+    Args:
+        narrative_stats: DataFrame with 'stat' and 'value' columns,
+                         loaded from ss_narrative_stats.csv.
+        stat_name:       Name of the stat to retrieve.
+
+    Returns:
+        Float value, or float('nan') if not found or DataFrame is empty.
+    """
+    if narrative_stats.empty or "stat" not in narrative_stats.columns:
+        return float("nan")
+    mask = narrative_stats["stat"] == stat_name
+    vals = narrative_stats.loc[mask, "value"].values
+    return float(vals[0]) if len(vals) else float("nan")
