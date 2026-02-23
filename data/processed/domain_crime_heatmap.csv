@@ -1,0 +1,7 @@
+deprivation_domain,Burglary,Drugs,Robbery,Shoplifting,Vehicle Crime,Violence And Sexual Offences
+Barriers,0.052,0.273,0.131,-0.004,0.075,0.287
+Education,-0.119,0.22,0.026,-0.034,-0.017,0.261
+Employment,0.039,0.33,0.127,-0.001,0.001,0.367
+Health,0.041,0.32,0.169,0.017,-0.06,0.368
+Income,0.053,0.351,0.154,0.003,0.008,0.374
+Living Env,0.422,0.292,0.421,0.199,0.229,0.292

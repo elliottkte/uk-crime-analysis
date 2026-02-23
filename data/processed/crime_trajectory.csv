@@ -1,0 +1,15 @@
+crime_type,trend_pct,key_driver,policy_lever
+Anti-social behaviour,5.3,Multiple factors,General policing
+Bicycle theft,-12.0,Multiple factors,General policing
+Burglary,-13.0,"Improved physical security, living environment","Housing investment, smart home technology"
+Criminal damage and arson,-2.7,Multiple factors,General policing
+Drugs,49.7,Changed recording practice (Op Yamata),"Recording consistency, drugs action plan"
+Other crime,26.1,Multiple factors,General policing
+Other theft,-24.2,Multiple factors,General policing
+Possession of weapons,15.4,Enforcement uplift post-Aug 2024,"Serious violence duty, knife crime strategy"
+Public order,3.0,Multiple factors,General policing
+Robbery,-1.7,"Structural deprivation, stable","Neighbourhood policing, youth services"
+Shoplifting,53.5,Food inflation and household debt,"Retail crime legislation, neighbourhood policing"
+Theft from the person,21.2,Tourism recovery and footfall,Targeted policing in high-footfall areas
+Vehicle crime,-18.5,Anti-theft technology improvements,Vehicle security standards
+Violence and sexual offences,4.0,Income and employment deprivation,"Violence reduction units, early intervention"

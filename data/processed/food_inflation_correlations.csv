@@ -1,0 +1,15 @@
+crime_type,correlation,p_value
+Other theft,0.717,0.0
+Vehicle crime,0.545,0.0006
+Burglary,0.403,0.0149
+Bicycle theft,0.119,0.4885
+Possession of weapons,0.114,0.5066
+Criminal damage and arson,0.098,0.5703
+Public order,0.019,0.9146
+Violence and sexual offences,-0.055,0.7512
+Anti-social behaviour,-0.205,0.2315
+Robbery,-0.257,0.1301
+Drugs,-0.342,0.0409
+Other crime,-0.453,0.0055
+Theft from the person,-0.735,0.0
+Shoplifting,-0.83,0.0

@@ -1,0 +1,99 @@
+crime_type,deprivation_domain,correlation,p_value
+Anti-social behaviour,IMD,0.395,0.0231
+Anti-social behaviour,Income,0.412,0.0172
+Anti-social behaviour,Employment,0.435,0.0114
+Anti-social behaviour,Education,-0.115,0.5233
+Anti-social behaviour,Health,0.209,0.2442
+Anti-social behaviour,Barriers,0.027,0.8794
+Anti-social behaviour,Living Env,0.67,0.0
+Bicycle theft,IMD,-0.071,0.6931
+Bicycle theft,Income,-0.211,0.2384
+Bicycle theft,Employment,-0.192,0.2853
+Bicycle theft,Education,-0.36,0.0394
+Bicycle theft,Health,-0.006,0.9746
+Bicycle theft,Barriers,0.06,0.7412
+Bicycle theft,Living Env,0.49,0.0038
+Burglary,IMD,-0.054,0.7641
+Burglary,Income,-0.189,0.2915
+Burglary,Employment,-0.155,0.3885
+Burglary,Education,-0.347,0.0476
+Burglary,Health,-0.078,0.6678
+Burglary,Barriers,0.075,0.677
+Burglary,Living Env,0.515,0.0022
+Criminal damage and arson,IMD,-0.068,0.7064
+Criminal damage and arson,Income,-0.224,0.2092
+Criminal damage and arson,Employment,-0.177,0.3246
+Criminal damage and arson,Education,-0.228,0.2017
+Criminal damage and arson,Health,-0.03,0.8701
+Criminal damage and arson,Barriers,0.104,0.5653
+Criminal damage and arson,Living Env,0.412,0.0171
+Drugs,IMD,-0.013,0.9433
+Drugs,Income,-0.165,0.3587
+Drugs,Employment,-0.136,0.4503
+Drugs,Education,-0.205,0.253
+Drugs,Health,-0.002,0.9903
+Drugs,Barriers,0.172,0.3384
+Drugs,Living Env,0.433,0.0118
+Other crime,IMD,-0.127,0.4797
+Other crime,Income,-0.262,0.1404
+Other crime,Employment,-0.239,0.1806
+Other crime,Education,-0.101,0.577
+Other crime,Health,-0.013,0.9415
+Other crime,Barriers,0.097,0.5926
+Other crime,Living Env,0.142,0.432
+Other theft,IMD,-0.125,0.4898
+Other theft,Income,-0.261,0.1427
+Other theft,Employment,-0.224,0.2091
+Other theft,Education,-0.32,0.0696
+Other theft,Health,-0.125,0.4891
+Other theft,Barriers,0.04,0.8248
+Other theft,Living Env,0.441,0.0101
+Possession of weapons,IMD,-0.038,0.8331
+Possession of weapons,Income,-0.194,0.2803
+Possession of weapons,Employment,-0.161,0.3717
+Possession of weapons,Education,-0.221,0.2158
+Possession of weapons,Health,-0.01,0.9542
+Possession of weapons,Barriers,0.153,0.3968
+Possession of weapons,Living Env,0.429,0.0126
+Public order,IMD,-0.087,0.6293
+Public order,Income,-0.234,0.1905
+Public order,Employment,-0.199,0.2673
+Public order,Education,-0.28,0.1149
+Public order,Health,-0.048,0.7923
+Public order,Barriers,0.091,0.616
+Public order,Living Env,0.422,0.0145
+Robbery,IMD,0.125,0.4899
+Robbery,Income,0.018,0.9189
+Robbery,Employment,0.057,0.7524
+Robbery,Education,-0.239,0.1807
+Robbery,Health,0.055,0.7595
+Robbery,Barriers,0.083,0.6454
+Robbery,Living Env,0.632,0.0001
+Shoplifting,IMD,-0.179,0.3198
+Shoplifting,Income,-0.331,0.0599
+Shoplifting,Employment,-0.299,0.0913
+Shoplifting,Education,-0.31,0.079
+Shoplifting,Health,-0.138,0.4449
+Shoplifting,Barriers,0.066,0.7138
+Shoplifting,Living Env,0.351,0.0454
+Theft from the person,IMD,-0.065,0.7208
+Theft from the person,Income,-0.162,0.3669
+Theft from the person,Employment,-0.12,0.5066
+Theft from the person,Education,-0.321,0.0688
+Theft from the person,Health,-0.119,0.5088
+Theft from the person,Barriers,-0.031,0.8627
+Theft from the person,Living Env,0.512,0.0023
+Vehicle crime,IMD,0.269,0.1301
+Vehicle crime,Income,0.189,0.2913
+Vehicle crime,Employment,0.241,0.1768
+Vehicle crime,Education,-0.038,0.8331
+Vehicle crime,Health,-0.108,0.5503
+Vehicle crime,Barriers,0.257,0.1485
+Vehicle crime,Living Env,0.496,0.0034
+Violence and sexual offences,IMD,0.024,0.8948
+Violence and sexual offences,Income,-0.127,0.4822
+Violence and sexual offences,Employment,-0.091,0.613
+Violence and sexual offences,Education,-0.189,0.2926
+Violence and sexual offences,Health,0.043,0.8137
+Violence and sexual offences,Barriers,0.172,0.3386
+Violence and sexual offences,Living Env,0.466,0.0063
