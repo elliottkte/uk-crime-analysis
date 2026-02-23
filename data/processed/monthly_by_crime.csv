@@ -1,0 +1,505 @@
+crime_type,month,count
+Anti-social behaviour,2023-01-01,14875
+Anti-social behaviour,2023-02-01,14607
+Anti-social behaviour,2023-03-01,16429
+Anti-social behaviour,2023-04-01,17369
+Anti-social behaviour,2023-05-01,20248
+Anti-social behaviour,2023-06-01,21968
+Anti-social behaviour,2023-07-01,21762
+Anti-social behaviour,2023-08-01,20619
+Anti-social behaviour,2023-09-01,21208
+Anti-social behaviour,2023-10-01,20062
+Anti-social behaviour,2023-11-01,17698
+Anti-social behaviour,2023-12-01,16357
+Anti-social behaviour,2024-01-01,16524
+Anti-social behaviour,2024-02-01,16976
+Anti-social behaviour,2024-03-01,18059
+Anti-social behaviour,2024-04-01,18252
+Anti-social behaviour,2024-05-01,22170
+Anti-social behaviour,2024-06-01,22007
+Anti-social behaviour,2024-07-01,22540
+Anti-social behaviour,2024-08-01,22213
+Anti-social behaviour,2024-09-01,19432
+Anti-social behaviour,2024-10-01,20356
+Anti-social behaviour,2024-11-01,18309
+Anti-social behaviour,2024-12-01,15903
+Anti-social behaviour,2025-01-01,16139
+Anti-social behaviour,2025-02-01,15251
+Anti-social behaviour,2025-03-01,18894
+Anti-social behaviour,2025-04-01,19470
+Anti-social behaviour,2025-05-01,21570
+Anti-social behaviour,2025-06-01,22442
+Anti-social behaviour,2025-07-01,24318
+Anti-social behaviour,2025-08-01,22561
+Anti-social behaviour,2025-09-01,18768
+Anti-social behaviour,2025-10-01,20801
+Anti-social behaviour,2025-11-01,18159
+Anti-social behaviour,2025-12-01,16709
+Bicycle theft,2023-01-01,952
+Bicycle theft,2023-02-01,1052
+Bicycle theft,2023-03-01,1130
+Bicycle theft,2023-04-01,1143
+Bicycle theft,2023-05-01,1512
+Bicycle theft,2023-06-01,1755
+Bicycle theft,2023-07-01,1620
+Bicycle theft,2023-08-01,1499
+Bicycle theft,2023-09-01,1671
+Bicycle theft,2023-10-01,1566
+Bicycle theft,2023-11-01,1181
+Bicycle theft,2023-12-01,938
+Bicycle theft,2024-01-01,981
+Bicycle theft,2024-02-01,1122
+Bicycle theft,2024-03-01,1233
+Bicycle theft,2024-04-01,1220
+Bicycle theft,2024-05-01,1408
+Bicycle theft,2024-06-01,1448
+Bicycle theft,2024-07-01,1475
+Bicycle theft,2024-08-01,1498
+Bicycle theft,2024-09-01,1518
+Bicycle theft,2024-10-01,1509
+Bicycle theft,2024-11-01,1268
+Bicycle theft,2024-12-01,869
+Bicycle theft,2025-01-01,845
+Bicycle theft,2025-02-01,850
+Bicycle theft,2025-03-01,1041
+Bicycle theft,2025-04-01,1188
+Bicycle theft,2025-05-01,1357
+Bicycle theft,2025-06-01,1306
+Bicycle theft,2025-07-01,1418
+Bicycle theft,2025-08-01,1264
+Bicycle theft,2025-09-01,1320
+Bicycle theft,2025-10-01,1438
+Bicycle theft,2025-11-01,1180
+Bicycle theft,2025-12-01,887
+Burglary,2023-01-01,5005
+Burglary,2023-02-01,4461
+Burglary,2023-03-01,4678
+Burglary,2023-04-01,4080
+Burglary,2023-05-01,4454
+Burglary,2023-06-01,4600
+Burglary,2023-07-01,4518
+Burglary,2023-08-01,4691
+Burglary,2023-09-01,4555
+Burglary,2023-10-01,4576
+Burglary,2023-11-01,4716
+Burglary,2023-12-01,4984
+Burglary,2024-01-01,5079
+Burglary,2024-02-01,4417
+Burglary,2024-03-01,4644
+Burglary,2024-04-01,4239
+Burglary,2024-05-01,4015
+Burglary,2024-06-01,3894
+Burglary,2024-07-01,4197
+Burglary,2024-08-01,4214
+Burglary,2024-09-01,4116
+Burglary,2024-10-01,4617
+Burglary,2024-11-01,4616
+Burglary,2024-12-01,4785
+Burglary,2025-01-01,4465
+Burglary,2025-02-01,3770
+Burglary,2025-03-01,3996
+Burglary,2025-04-01,3667
+Burglary,2025-05-01,3867
+Burglary,2025-06-01,3657
+Burglary,2025-07-01,3807
+Burglary,2025-08-01,3948
+Burglary,2025-09-01,4006
+Burglary,2025-10-01,4297
+Burglary,2025-11-01,4432
+Burglary,2025-12-01,4211
+Criminal damage and arson,2023-01-01,4293
+Criminal damage and arson,2023-02-01,4099
+Criminal damage and arson,2023-03-01,4475
+Criminal damage and arson,2023-04-01,4463
+Criminal damage and arson,2023-05-01,4918
+Criminal damage and arson,2023-06-01,5274
+Criminal damage and arson,2023-07-01,5015
+Criminal damage and arson,2023-08-01,4851
+Criminal damage and arson,2023-09-01,4975
+Criminal damage and arson,2023-10-01,4752
+Criminal damage and arson,2023-11-01,4640
+Criminal damage and arson,2023-12-01,4727
+Criminal damage and arson,2024-01-01,4861
+Criminal damage and arson,2024-02-01,4564
+Criminal damage and arson,2024-03-01,4468
+Criminal damage and arson,2024-04-01,4464
+Criminal damage and arson,2024-05-01,4560
+Criminal damage and arson,2024-06-01,4632
+Criminal damage and arson,2024-07-01,5234
+Criminal damage and arson,2024-08-01,5020
+Criminal damage and arson,2024-09-01,4568
+Criminal damage and arson,2024-10-01,4589
+Criminal damage and arson,2024-11-01,4518
+Criminal damage and arson,2024-12-01,4152
+Criminal damage and arson,2025-01-01,4184
+Criminal damage and arson,2025-02-01,4055
+Criminal damage and arson,2025-03-01,4548
+Criminal damage and arson,2025-04-01,4663
+Criminal damage and arson,2025-05-01,4854
+Criminal damage and arson,2025-06-01,4796
+Criminal damage and arson,2025-07-01,5155
+Criminal damage and arson,2025-08-01,4779
+Criminal damage and arson,2025-09-01,4531
+Criminal damage and arson,2025-10-01,4700
+Criminal damage and arson,2025-11-01,4467
+Criminal damage and arson,2025-12-01,4249
+Drugs,2023-01-01,3508
+Drugs,2023-02-01,2921
+Drugs,2023-03-01,3068
+Drugs,2023-04-01,2823
+Drugs,2023-05-01,3055
+Drugs,2023-06-01,3442
+Drugs,2023-07-01,3276
+Drugs,2023-08-01,3381
+Drugs,2023-09-01,3005
+Drugs,2023-10-01,2703
+Drugs,2023-11-01,2721
+Drugs,2023-12-01,2454
+Drugs,2024-01-01,2731
+Drugs,2024-02-01,2766
+Drugs,2024-03-01,2647
+Drugs,2024-04-01,2556
+Drugs,2024-05-01,2838
+Drugs,2024-06-01,2757
+Drugs,2024-07-01,2944
+Drugs,2024-08-01,3138
+Drugs,2024-09-01,3747
+Drugs,2024-10-01,4055
+Drugs,2024-11-01,4258
+Drugs,2024-12-01,3951
+Drugs,2025-01-01,4150
+Drugs,2025-02-01,3757
+Drugs,2025-03-01,4058
+Drugs,2025-04-01,4636
+Drugs,2025-05-01,4975
+Drugs,2025-06-01,4582
+Drugs,2025-07-01,4898
+Drugs,2025-08-01,5070
+Drugs,2025-09-01,4553
+Drugs,2025-10-01,4743
+Drugs,2025-11-01,4551
+Drugs,2025-12-01,4451
+Other crime,2023-01-01,931
+Other crime,2023-02-01,874
+Other crime,2023-03-01,976
+Other crime,2023-04-01,824
+Other crime,2023-05-01,894
+Other crime,2023-06-01,967
+Other crime,2023-07-01,858
+Other crime,2023-08-01,851
+Other crime,2023-09-01,917
+Other crime,2023-10-01,884
+Other crime,2023-11-01,811
+Other crime,2023-12-01,715
+Other crime,2024-01-01,833
+Other crime,2024-02-01,783
+Other crime,2024-03-01,760
+Other crime,2024-04-01,874
+Other crime,2024-05-01,934
+Other crime,2024-06-01,950
+Other crime,2024-07-01,966
+Other crime,2024-08-01,977
+Other crime,2024-09-01,1098
+Other crime,2024-10-01,1210
+Other crime,2024-11-01,1151
+Other crime,2024-12-01,1035
+Other crime,2025-01-01,1155
+Other crime,2025-02-01,1020
+Other crime,2025-03-01,1199
+Other crime,2025-04-01,1177
+Other crime,2025-05-01,1069
+Other crime,2025-06-01,1153
+Other crime,2025-07-01,1205
+Other crime,2025-08-01,1123
+Other crime,2025-09-01,1036
+Other crime,2025-10-01,1100
+Other crime,2025-11-01,1033
+Other crime,2025-12-01,978
+Other theft,2023-01-01,10634
+Other theft,2023-02-01,10134
+Other theft,2023-03-01,11175
+Other theft,2023-04-01,10061
+Other theft,2023-05-01,11414
+Other theft,2023-06-01,12677
+Other theft,2023-07-01,11716
+Other theft,2023-08-01,10746
+Other theft,2023-09-01,10594
+Other theft,2023-10-01,11709
+Other theft,2023-11-01,12246
+Other theft,2023-12-01,11360
+Other theft,2024-01-01,10325
+Other theft,2024-02-01,10610
+Other theft,2024-03-01,9036
+Other theft,2024-04-01,8772
+Other theft,2024-05-01,9049
+Other theft,2024-06-01,9738
+Other theft,2024-07-01,9476
+Other theft,2024-08-01,8783
+Other theft,2024-09-01,8531
+Other theft,2024-10-01,9412
+Other theft,2024-11-01,9362
+Other theft,2024-12-01,9217
+Other theft,2025-01-01,8087
+Other theft,2025-02-01,7745
+Other theft,2025-03-01,7928
+Other theft,2025-04-01,8191
+Other theft,2025-05-01,8690
+Other theft,2025-06-01,8556
+Other theft,2025-07-01,9005
+Other theft,2025-08-01,8171
+Other theft,2025-09-01,8436
+Other theft,2025-10-01,9000
+Other theft,2025-11-01,8794
+Other theft,2025-12-01,9352
+Possession of weapons,2023-01-01,437
+Possession of weapons,2023-02-01,364
+Possession of weapons,2023-03-01,436
+Possession of weapons,2023-04-01,398
+Possession of weapons,2023-05-01,427
+Possession of weapons,2023-06-01,510
+Possession of weapons,2023-07-01,517
+Possession of weapons,2023-08-01,436
+Possession of weapons,2023-09-01,378
+Possession of weapons,2023-10-01,386
+Possession of weapons,2023-11-01,336
+Possession of weapons,2023-12-01,351
+Possession of weapons,2024-01-01,414
+Possession of weapons,2024-02-01,430
+Possession of weapons,2024-03-01,400
+Possession of weapons,2024-04-01,325
+Possession of weapons,2024-05-01,383
+Possession of weapons,2024-06-01,347
+Possession of weapons,2024-07-01,351
+Possession of weapons,2024-08-01,389
+Possession of weapons,2024-09-01,424
+Possession of weapons,2024-10-01,393
+Possession of weapons,2024-11-01,369
+Possession of weapons,2024-12-01,314
+Possession of weapons,2025-01-01,327
+Possession of weapons,2025-02-01,337
+Possession of weapons,2025-03-01,429
+Possession of weapons,2025-04-01,495
+Possession of weapons,2025-05-01,437
+Possession of weapons,2025-06-01,542
+Possession of weapons,2025-07-01,589
+Possession of weapons,2025-08-01,573
+Possession of weapons,2025-09-01,507
+Possession of weapons,2025-10-01,482
+Possession of weapons,2025-11-01,521
+Possession of weapons,2025-12-01,501
+Public order,2023-01-01,4196
+Public order,2023-02-01,4167
+Public order,2023-03-01,4780
+Public order,2023-04-01,4534
+Public order,2023-05-01,4981
+Public order,2023-06-01,5618
+Public order,2023-07-01,5070
+Public order,2023-08-01,4585
+Public order,2023-09-01,4935
+Public order,2023-10-01,4803
+Public order,2023-11-01,4926
+Public order,2023-12-01,4581
+Public order,2024-01-01,4166
+Public order,2024-02-01,4477
+Public order,2024-03-01,4317
+Public order,2024-04-01,4198
+Public order,2024-05-01,4840
+Public order,2024-06-01,4911
+Public order,2024-07-01,5190
+Public order,2024-08-01,5066
+Public order,2024-09-01,4685
+Public order,2024-10-01,4899
+Public order,2024-11-01,4533
+Public order,2024-12-01,4030
+Public order,2025-01-01,4028
+Public order,2025-02-01,3801
+Public order,2025-03-01,4593
+Public order,2025-04-01,4496
+Public order,2025-05-01,4988
+Public order,2025-06-01,5612
+Public order,2025-07-01,6128
+Public order,2025-08-01,5475
+Public order,2025-09-01,5197
+Public order,2025-10-01,5246
+Public order,2025-11-01,4757
+Public order,2025-12-01,4591
+Robbery,2023-01-01,2569
+Robbery,2023-02-01,2632
+Robbery,2023-03-01,2548
+Robbery,2023-04-01,2496
+Robbery,2023-05-01,2662
+Robbery,2023-06-01,2797
+Robbery,2023-07-01,2602
+Robbery,2023-08-01,2385
+Robbery,2023-09-01,2598
+Robbery,2023-10-01,2555
+Robbery,2023-11-01,3101
+Robbery,2023-12-01,3151
+Robbery,2024-01-01,2934
+Robbery,2024-02-01,2688
+Robbery,2024-03-01,2756
+Robbery,2024-04-01,2575
+Robbery,2024-05-01,2993
+Robbery,2024-06-01,2756
+Robbery,2024-07-01,2663
+Robbery,2024-08-01,2681
+Robbery,2024-09-01,2729
+Robbery,2024-10-01,3087
+Robbery,2024-11-01,2907
+Robbery,2024-12-01,2734
+Robbery,2025-01-01,2471
+Robbery,2025-02-01,2459
+Robbery,2025-03-01,2585
+Robbery,2025-04-01,2619
+Robbery,2025-05-01,2769
+Robbery,2025-06-01,2769
+Robbery,2025-07-01,2838
+Robbery,2025-08-01,2628
+Robbery,2025-09-01,2526
+Robbery,2025-10-01,2590
+Robbery,2025-11-01,2717
+Robbery,2025-12-01,2581
+Shoplifting,2023-01-01,4041
+Shoplifting,2023-02-01,3884
+Shoplifting,2023-03-01,4565
+Shoplifting,2023-04-01,4488
+Shoplifting,2023-05-01,4846
+Shoplifting,2023-06-01,5424
+Shoplifting,2023-07-01,5278
+Shoplifting,2023-08-01,5372
+Shoplifting,2023-09-01,4925
+Shoplifting,2023-10-01,4987
+Shoplifting,2023-11-01,4884
+Shoplifting,2023-12-01,4732
+Shoplifting,2024-01-01,5150
+Shoplifting,2024-02-01,5396
+Shoplifting,2024-03-01,5985
+Shoplifting,2024-04-01,6899
+Shoplifting,2024-05-01,7018
+Shoplifting,2024-06-01,6862
+Shoplifting,2024-07-01,8013
+Shoplifting,2024-08-01,8131
+Shoplifting,2024-09-01,7914
+Shoplifting,2024-10-01,8235
+Shoplifting,2024-11-01,7932
+Shoplifting,2024-12-01,6663
+Shoplifting,2025-01-01,6949
+Shoplifting,2025-02-01,6797
+Shoplifting,2025-03-01,7124
+Shoplifting,2025-04-01,7109
+Shoplifting,2025-05-01,7938
+Shoplifting,2025-06-01,7653
+Shoplifting,2025-07-01,8052
+Shoplifting,2025-08-01,8149
+Shoplifting,2025-09-01,7403
+Shoplifting,2025-10-01,7272
+Shoplifting,2025-11-01,6858
+Shoplifting,2025-12-01,6830
+Theft from the person,2023-01-01,5420
+Theft from the person,2023-02-01,5431
+Theft from the person,2023-03-01,5538
+Theft from the person,2023-04-01,5495
+Theft from the person,2023-05-01,5613
+Theft from the person,2023-06-01,5718
+Theft from the person,2023-07-01,5437
+Theft from the person,2023-08-01,4922
+Theft from the person,2023-09-01,4980
+Theft from the person,2023-10-01,6271
+Theft from the person,2023-11-01,8428
+Theft from the person,2023-12-01,8138
+Theft from the person,2024-01-01,6880
+Theft from the person,2024-02-01,7887
+Theft from the person,2024-03-01,9273
+Theft from the person,2024-04-01,8707
+Theft from the person,2024-05-01,7439
+Theft from the person,2024-06-01,7634
+Theft from the person,2024-07-01,7523
+Theft from the person,2024-08-01,7186
+Theft from the person,2024-09-01,7046
+Theft from the person,2024-10-01,9078
+Theft from the person,2024-11-01,10342
+Theft from the person,2024-12-01,9771
+Theft from the person,2025-01-01,7658
+Theft from the person,2025-02-01,8071
+Theft from the person,2025-03-01,8448
+Theft from the person,2025-04-01,7702
+Theft from the person,2025-05-01,7113
+Theft from the person,2025-06-01,7047
+Theft from the person,2025-07-01,7012
+Theft from the person,2025-08-01,6209
+Theft from the person,2025-09-01,5933
+Theft from the person,2025-10-01,6389
+Theft from the person,2025-11-01,7542
+Theft from the person,2025-12-01,7402
+Vehicle crime,2023-01-01,9107
+Vehicle crime,2023-02-01,8182
+Vehicle crime,2023-03-01,8776
+Vehicle crime,2023-04-01,7886
+Vehicle crime,2023-05-01,8594
+Vehicle crime,2023-06-01,8760
+Vehicle crime,2023-07-01,8366
+Vehicle crime,2023-08-01,8362
+Vehicle crime,2023-09-01,8896
+Vehicle crime,2023-10-01,9126
+Vehicle crime,2023-11-01,9023
+Vehicle crime,2023-12-01,8355
+Vehicle crime,2024-01-01,8899
+Vehicle crime,2024-02-01,8083
+Vehicle crime,2024-03-01,8416
+Vehicle crime,2024-04-01,8460
+Vehicle crime,2024-05-01,8421
+Vehicle crime,2024-06-01,7863
+Vehicle crime,2024-07-01,7922
+Vehicle crime,2024-08-01,7815
+Vehicle crime,2024-09-01,7632
+Vehicle crime,2024-10-01,8246
+Vehicle crime,2024-11-01,7855
+Vehicle crime,2024-12-01,7108
+Vehicle crime,2025-01-01,7287
+Vehicle crime,2025-02-01,7101
+Vehicle crime,2025-03-01,7087
+Vehicle crime,2025-04-01,6766
+Vehicle crime,2025-05-01,7141
+Vehicle crime,2025-06-01,6871
+Vehicle crime,2025-07-01,7031
+Vehicle crime,2025-08-01,6779
+Vehicle crime,2025-09-01,7259
+Vehicle crime,2025-10-01,7431
+Vehicle crime,2025-11-01,7131
+Vehicle crime,2025-12-01,6414
+Violence and sexual offences,2023-01-01,19869
+Violence and sexual offences,2023-02-01,19106
+Violence and sexual offences,2023-03-01,20862
+Violence and sexual offences,2023-04-01,20148
+Violence and sexual offences,2023-05-01,22548
+Violence and sexual offences,2023-06-01,25313
+Violence and sexual offences,2023-07-01,23210
+Violence and sexual offences,2023-08-01,21567
+Violence and sexual offences,2023-09-01,22365
+Violence and sexual offences,2023-10-01,21445
+Violence and sexual offences,2023-11-01,22091
+Violence and sexual offences,2023-12-01,22576
+Violence and sexual offences,2024-01-01,21619
+Violence and sexual offences,2024-02-01,21340
+Violence and sexual offences,2024-03-01,20288
+Violence and sexual offences,2024-04-01,19418
+Violence and sexual offences,2024-05-01,21860
+Violence and sexual offences,2024-06-01,21719
+Violence and sexual offences,2024-07-01,22534
+Violence and sexual offences,2024-08-01,21176
+Violence and sexual offences,2024-09-01,21216
+Violence and sexual offences,2024-10-01,21912
+Violence and sexual offences,2024-11-01,21332
+Violence and sexual offences,2024-12-01,21210
+Violence and sexual offences,2025-01-01,19774
+Violence and sexual offences,2025-02-01,19285
+Violence and sexual offences,2025-03-01,22352
+Violence and sexual offences,2025-04-01,21728
+Violence and sexual offences,2025-05-01,23354
+Violence and sexual offences,2025-06-01,24594
+Violence and sexual offences,2025-07-01,25934
+Violence and sexual offences,2025-08-01,23074
+Violence and sexual offences,2025-09-01,22445
+Violence and sexual offences,2025-10-01,23768
+Violence and sexual offences,2025-11-01,22729
+Violence and sexual offences,2025-12-01,22560

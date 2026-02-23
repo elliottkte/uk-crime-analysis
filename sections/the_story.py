@@ -16,7 +16,7 @@ from utils.charts import (
     style_yaxis,
 )
 from utils.constants import CHART_CONFIG
-from utils.data_loaders import load_full_street
+from utils.data_loaders import load_street_summary
 
 
 def render():
@@ -32,24 +32,26 @@ def render():
     and what the evidence suggests about where London is headed.
     """)
 
-    street = load_full_street()
+    summary = load_street_summary()
+
+    headline      = summary["headline_totals"].iloc[0]
+    annual        = summary["crime_annual_change"].copy()
+    monthly_all   = summary["monthly_totals"]
 
     # ── Derive headline figures ───────────────────────────────────
-    total_crimes  = len(street)
-    crime_by_year = (
-        street.groupby(["crime_type", "year"])
-        .size()
-        .unstack(fill_value=0)
-    )
-    crime_by_year["change"] = (
-        (crime_by_year[2025] - crime_by_year[2023])
-        / crime_by_year[2023] * 100
-    ).round(1)
+    total_crimes = int(headline["total_crimes"])
 
-    shop_change     = crime_by_year.loc["Shoplifting",   "change"]
-    drug_change     = crime_by_year.loc["Drugs",         "change"]
-    vehicle_change  = crime_by_year.loc["Vehicle crime", "change"]
-    burglary_change = crime_by_year.loc["Burglary",      "change"]
+    annual = annual.set_index("crime_type")
+
+    def change(crime_type):
+        if crime_type in annual.index and "change_pct" in annual.columns:
+            return float(annual.loc[crime_type, "change_pct"])
+        return 0.0
+
+    shop_change     = change("Shoplifting")
+    drug_change     = change("Drugs")
+    vehicle_change  = change("Vehicle crime")
+    burglary_change = change("Burglary")
 
     # ── Headline metrics ──────────────────────────────────────────
     st.caption(
@@ -136,7 +138,16 @@ def render():
     technology and physical environment sit at the bottom.
     """)
 
-    fig1 = crime_change_overview_chart(crime_by_year)
+    # Reconstruct crime_by_year in the shape crime_change_overview_chart expects
+    annual_reset = summary["crime_annual_change"].copy()
+    annual_reset.columns = [
+        int(c) if c.isdigit() else c for c in annual_reset.columns
+    ]
+    if "change_pct" in annual_reset.columns:
+        annual_reset = annual_reset.rename(columns={"change_pct": "change"})
+    annual_reset = annual_reset.set_index("crime_type")
+
+    fig1 = crime_change_overview_chart(annual_reset)
     st.plotly_chart(fig1, use_container_width=True, config=CHART_CONFIG)
 
     st.divider()
@@ -148,12 +159,6 @@ def render():
     UK cost of living crisis. The relationship between economic events and
     crime patterns is examined in detail in the Economic Crime section.
     """)
-
-    monthly_all = (
-        street.groupby("month")
-        .size()
-        .reset_index(name="count")
-    )
 
     fig2 = monthly_total_chart(monthly_all, annotate_events=True)
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CONFIG)

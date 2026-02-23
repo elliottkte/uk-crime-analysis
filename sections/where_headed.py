@@ -21,7 +21,7 @@ from utils.constants import (
     RISK_COLOURS,
     VULNERABILITY_RENAME,
 )
-from utils.data_loaders import load_full_street, load_model, load_outlook_data
+from utils.data_loaders import load_street_summary, load_model, load_outlook_data
 
 
 def render():
@@ -37,8 +37,14 @@ def render():
     vulnerability = data["vulnerability"]
     trajectory    = data["trajectory"]
     scenarios     = data["scenarios"]
-    street        = load_full_street()
+    summary       = load_street_summary()
     model         = load_model()
+
+    monthly_shoplifting = (
+        summary["monthly_by_crime"][
+            summary["monthly_by_crime"]["crime_type"] == "Shoplifting"
+        ][["month", "count"]].copy()
+    )
 
     # ── Derived values ────────────────────────────────────────────
     higher_risk_count = len(vulnerability[vulnerability["risk_tier"] == "Higher risk"])
@@ -92,7 +98,7 @@ def render():
     st.divider()
 
     # ── 3. Shoplifting scenarios ──────────────────────────────────
-    _render_scenarios_chart(street, scenarios)
+    _render_scenarios_chart(monthly_shoplifting, scenarios)
 
     st.divider()
 
@@ -296,7 +302,7 @@ def _render_trajectory_chart(trajectory: pd.DataFrame):
         """)
 
 
-def _render_scenarios_chart(street: pd.DataFrame, scenarios: pd.DataFrame):
+def _render_scenarios_chart(monthly_shop: pd.DataFrame, scenarios: pd.DataFrame):
     st.subheader("3. Shoplifting in 2026: three scenarios")
     st.markdown("""
     Shoplifting is the crime most directly responsive to economic conditions
@@ -306,10 +312,7 @@ def _render_scenarios_chart(street: pd.DataFrame, scenarios: pd.DataFrame):
     statistical forecasts.
     """)
 
-    historical = (
-        street[street["crime_type"] == "Shoplifting"]
-        .groupby("month").size().reset_index(name="count")
-    )
+    historical = monthly_shop.copy()
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(

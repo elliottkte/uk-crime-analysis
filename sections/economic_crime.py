@@ -19,7 +19,7 @@ from utils.charts import (
     style_yaxis,
 )
 from utils.constants import BOROUGH_RENAME, CHART_CONFIG
-from utils.data_loaders import load_economic_crime_data, load_full_street
+from utils.data_loaders import load_economic_crime_data, load_street_summary
 from utils.helpers import safe_get_borough
 
 
@@ -31,8 +31,16 @@ def render():
     what the evidence suggests about the outlook.
     """)
 
-    data   = load_economic_crime_data()
-    street = load_full_street()
+    data    = load_economic_crime_data()
+    summary = load_street_summary()
+
+    monthly_by_crime = summary["monthly_by_crime"]
+
+    def monthly_crime(crime_type):
+        return (
+            monthly_by_crime[monthly_by_crime["crime_type"] == crime_type]
+            [["month", "count"]].copy()
+        )
 
     indexed     = data["indexed"]
     lag_df      = data["lag_df"]
@@ -54,10 +62,7 @@ def render():
         (trend_vals.max() - trend_vals.min()) / trend_vals.min() * 100, 1
     )
 
-    monthly_shop_all = (
-        street[street["crime_type"] == "Shoplifting"]
-        .groupby("month").size().reset_index(name="count")
-    )
+    monthly_shop_all = monthly_crime("Shoplifting")
     avg_2025 = monthly_shop_all[monthly_shop_all["month"].dt.year == 2025]["count"].mean()
     avg_2023 = monthly_shop_all[monthly_shop_all["month"].dt.year == 2023]["count"].mean()
 
@@ -98,7 +103,7 @@ def render():
     st.divider()
 
     # ── 2. Shoplifting vs food inflation ──────────────────────────
-    _render_shoplifting_inflation_chart(street, food, best_lag)
+    _render_shoplifting_inflation_chart(monthly_crime("Shoplifting"), food, best_lag)
 
     st.divider()
 
@@ -109,7 +114,7 @@ def render():
 
     # ── 4. Drugs changepoint ──────────────────────────────────────
     _render_drugs_changepoint_chart(
-        street, cp_date, before_mean, after_mean, pct_increase
+        monthly_crime("Drugs"), cp_date, before_mean, after_mean, pct_increase
     )
 
     st.divider()
@@ -186,7 +191,7 @@ def _render_crime_index_chart(indexed: pd.DataFrame):
 
 
 def _render_shoplifting_inflation_chart(
-    street: pd.DataFrame,
+    monthly_shop: pd.DataFrame,
     food: pd.DataFrame,
     best_lag: pd.Series,
 ):
@@ -196,10 +201,7 @@ def _render_shoplifting_inflation_chart(
     falling when they ease. The data shows something different.
     """)
 
-    monthly_shop = (
-        street[street["crime_type"] == "Shoplifting"]
-        .groupby("month").size().reset_index(name="count")
-    )
+    monthly_shop = monthly_shop.copy()
     merged     = monthly_shop.merge(food, on="month", how="inner")
     inflection = merged[merged["food_inflation"] < 5].iloc[0]
 
@@ -329,7 +331,7 @@ def _render_decomposition_chart(decomp_clean: pd.DataFrame, trend_increase: floa
 
 
 def _render_drugs_changepoint_chart(
-    street: pd.DataFrame,
+    monthly_drugs: pd.DataFrame,
     cp_date: pd.Timestamp,
     before_mean: float,
     after_mean: float,
@@ -342,10 +344,7 @@ def _render_drugs_changepoint_chart(
     and have remained at that higher level since.
     """)
 
-    monthly_drugs = (
-        street[street["crime_type"] == "Drugs"]
-        .groupby("month").size().reset_index(name="count")
-    )
+    monthly_drugs = monthly_drugs.copy()
 
     fig = go.Figure()
     fig.add_vrect(

@@ -83,6 +83,52 @@ def load_modelling_data() -> pd.DataFrame:
         st.stop()
 
 
+# ── Street summary (replaces load_full_street for deployment) ────
+
+@st.cache_data
+def load_street_summary() -> dict:
+    """
+    Returns pre-computed monthly aggregations that replace load_full_street()
+    for dashboard rendering. These are small files suitable for git/deployment.
+
+    Keys:
+        monthly_by_crime   – monthly counts per crime type
+        monthly_totals     – monthly total across all crimes
+        crime_annual_change – crime type counts by year + % change
+        headline_totals    – scalar totals (total_crimes, date range)
+    """
+    files = {
+        "monthly_by_crime":    "monthly_by_crime.csv",
+        "monthly_totals":      "monthly_totals.csv",
+        "crime_annual_change": "crime_annual_change.csv",
+        "headline_totals":     "headline_totals.csv",
+    }
+
+    result  = {}
+    missing = []
+
+    for key, filename in files.items():
+        try:
+            df = pd.read_csv(_path(filename))
+            if "month" in df.columns:
+                df["month"] = pd.to_datetime(df["month"])
+            result[key] = df
+        except FileNotFoundError:
+            missing.append(filename)
+        except Exception as e:
+            st.error(f"Could not load {filename}: {e}")
+            st.stop()
+
+    if missing:
+        st.error(
+            f"Street summary files not found: {', '.join(missing)}. "
+            "Run processing/07_precompute_summary.py first."
+        )
+        st.stop()
+
+    return result
+
+
 # ── Economic Crime section ────────────────────────────────────────
 
 @st.cache_data
