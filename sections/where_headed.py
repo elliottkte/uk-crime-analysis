@@ -517,7 +517,10 @@ def _render_methodology_expander(model, weight_sens: pd.DataFrame):
             ).reset_index()
             pivot.columns.name = None
             pivot = pivot.sort_values("Base")
-            pivot.columns = ["Borough"] + [c for c in pivot.columns if c != "Borough"]
+            if "Borough" not in pivot.columns:
+                pivot = pivot.rename(columns={"borough": "Borough"})
+            cols = ["Borough"] + [c for c in pivot.columns if c != "Borough"]
+            pivot = pivot[cols]
             st.markdown("**Full ranking table by weighting scenario**")
             st.dataframe(pivot.head(15), hide_index=True)
             st.caption("Showing top 15 boroughs by base-scenario rank.")
