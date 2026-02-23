@@ -54,6 +54,18 @@ OUT_DIR          = os.path.join("data", "processed")
 IMD_LSOA_COL    = "LSOA code (2021)"
 IMD_BOROUGH_COL = "Local Authority District name (2024)"
 
+# Standard 33 London boroughs — used to filter out non-London LSOAs
+LONDON_BOROUGHS_33 = {
+    "Barking and Dagenham", "Barnet", "Bexley", "Brent", "Bromley",
+    "Camden", "City of London", "Croydon", "Ealing", "Enfield",
+    "Greenwich", "Hackney", "Hammersmith and Fulham", "Haringey",
+    "Harrow", "Havering", "Hillingdon", "Hounslow", "Islington",
+    "Kensington and Chelsea", "Kingston upon Thames", "Lambeth",
+    "Lewisham", "Merton", "Newham", "Redbridge", "Richmond upon Thames",
+    "Southwark", "Sutton", "Tower Hamlets", "Waltham Forest",
+    "Wandsworth", "Westminster",
+}
+
 # Minimum months for STL to be considered reliable (2 full annual cycles)
 STL_MIN_MONTHS = 24
 
@@ -424,6 +436,7 @@ def build_borough_shoplifting_trend(street: pd.DataFrame, lookup: pd.DataFrame) 
     )
 
     shop = shop.dropna(subset=["borough"])
+    shop = shop[shop["borough"].isin(LONDON_BOROUGHS_33)]
 
     annual = (
         shop.groupby(["borough", "year"])

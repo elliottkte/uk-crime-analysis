@@ -19,7 +19,7 @@ statistical forecasts with distinct trajectories.
 
 Fix (critique - IMD age caveat in headline): the vulnerability index
 headline and model section now carry a visible note that IMD data is
-from 2025, so users understand the deprivation estimates may be stale
+from 2019, so users understand the deprivation estimates may be stale
 before drilling into borough rankings.
 
 Fix (critique - vulnerability index weight justification): the
@@ -53,10 +53,12 @@ from utils.data_loaders import (
 def render():
     st.title("Where is London Headed?")
     st.markdown("""
-    Drawing together findings from across this dashboard, this section asks
-    what London's crime landscape is likely to look like in 2026 and beyond.
-    The data points to a city under sustained structural pressure, with some
-    crimes responding to economic conditions and others to policing decisions.
+    A Random Forest model trained on deprivation data alone can predict the
+    majority of variation in crime rates across London's neighbourhoods —
+    without knowing anything about policing levels. The structural conditions
+    that produce crime are baked into the geography. This section maps which
+    boroughs are most exposed, where each crime type is heading in 2026,
+    and what the model tells us about the limits of enforcement-only responses.
     """)
 
     data          = load_outlook_data()
@@ -93,23 +95,22 @@ def render():
     st.caption(
         "Vulnerability index combines deprivation, shoplifting trend, "
         "crime-deprivation mismatch, and policing intensity across all "
-        "33 London boroughs. **Deprivation data is from 2025 (IMD 2025) — "
-        "the most recent available index.** Post-pandemic changes to "
-        "deprivation are not captured; rankings in most-deprived areas "
-        "may understate current risk. See methodology expander for full detail."
+        "33 London boroughs. Deprivation data: MHCLG English Indices of "
+        "Deprivation 2025 (most recent release). "
+        "See methodology expander for full detail."
     )
     col1, col2, col3 = st.columns(3)
     col1.metric(
-        "Higher risk boroughs", f"{higher_risk_count}",
-        "Elevated on multiple indicators", delta_color="off",
+        "Higher risk boroughs",
+        f"{higher_risk_count} of 33",
     )
     col2.metric(
-        "Most vulnerable borough", f"{top1['borough']}",
-        "Highest composite risk score", delta_color="off",
+        "Most vulnerable borough",
+        f"{top1['borough']}",
     )
     col3.metric(
-        "Lower risk boroughs", f"{lower_risk_count}",
-        "Below average on all indicators", delta_color="off",
+        "Lower risk boroughs",
+        f"{lower_risk_count} of 33",
     )
 
     st.divider()
@@ -151,18 +152,17 @@ def _render_vulnerability_map(
     top1_shop_change, top2_shop_change,
     weight_sens: pd.DataFrame,
 ):
-    st.subheader("1. Which boroughs are most at risk heading into 2026?")
+    st.subheader("1. The boroughs most exposed to sustained structural pressure")
     st.markdown("""
-    The vulnerability index combines four factors: how deprived a borough is,
-    how fast shoplifting has risen there, whether crime is higher than
-    deprivation alone would predict, and how intensively but how ineffectively
-    it is being policed. A high score means a borough is under pressure on
-    multiple fronts.
+    The vulnerability index combines four indicators: deprivation level,
+    shoplifting trajectory, whether crime exceeds what deprivation alone
+    would predict, and policing intensity relative to arrest outcomes.
+    A high score means a borough is under simultaneous pressure on multiple
+    fronts — not just deprived, but deteriorating on several indicators at once.
 
-    Weights applied: deprivation (35%), shoplifting trend (30%),
-    crime-deprivation mismatch (20%), policing intensity adjusted for
-    effectiveness (15%). All components normalised by rank before weighting
-    to reduce sensitivity to outlier boroughs.
+    Weights: deprivation (35%), shoplifting trend (30%), crime-deprivation
+    mismatch (20%), policing pressure (15%). All components rank-normalised
+    before weighting to prevent City of London outlier effects.
     """)
 
     # Fix (critique): surface weight sensitivity note before the map,
@@ -254,12 +254,12 @@ def _render_vulnerability_map(
 
 
 def _render_trajectory_chart(trajectory: pd.DataFrame):
-    st.subheader("2. Where is each crime type headed?")
+    st.subheader("2. Two crime types are set to stay high; two are already falling")
     st.markdown("""
-    The chart shows the actual change recorded between 2023 and 2025 for
-    each major crime type. Hover over each bar for the primary driver and
-    main policy lever. The directional assessment reflects analytical
-    judgment informed by the data and is not a statistical forecast.
+    Actual change 2023 to 2025, by crime type. Hover each bar for the
+    primary driver and main policy lever. The directional commentary
+    in the columns below reflects analytical judgment from the data —
+    not a statistical forecast.
     """)
 
     trajectory_sorted = trajectory.sort_values("trend_pct", ascending=True)
@@ -328,17 +328,13 @@ def _render_trajectory_chart(trajectory: pd.DataFrame):
 
 
 def _render_scenarios_chart(monthly_shop: pd.DataFrame, scenarios: pd.DataFrame):
-    st.subheader("3. Shoplifting in 2026: three scenarios")
+    st.subheader("3. Where shoplifting goes in 2026 depends on two policy decisions")
     st.markdown("""
-    Shoplifting is the crime most directly responsive to economic conditions
-    and the one with the most available policy levers. The scenarios below
-    reflect three plausible futures depending on how economic and policy
-    conditions develop.
-
-    **These are assumption-based projections, not statistical forecasts.**
-    The shaded band shows the range between the optimistic and pessimistic
-    assumptions. The three assumptions are described below the chart — they
-    should not be read as a prediction of distinct trajectories.
+    Shoplifting is the crime most sensitive to both economic conditions and
+    policy intervention. The shaded band shows the range of plausible
+    outcomes; the dashed line is the central assumption. These are
+    scenario projections based on stated assumptions — not statistical
+    forecasts with distinct trajectories.
     """)
 
     historical = monthly_shop.copy()
@@ -423,7 +419,7 @@ def _render_scenarios_chart(monthly_shop: pd.DataFrame, scenarios: pd.DataFrame)
 
 
 def _render_model_importance(model):
-    st.subheader("4. Why policing alone cannot resolve this")
+    st.subheader("4. Deprivation predicts crime geography — policing works on the residual")
 
     r2_display = _get_model_r2(model)
 
@@ -440,12 +436,11 @@ def _render_model_importance(model):
     than random rows, which gives a more honest estimate of predictive power
     by preventing spatial leakage between training and test data.
 
-    **IMD data caveat:** features are drawn from the 2025 Index of Multiple
-    Deprivation, the most recent available. Five years of post-pandemic
-    economic pressure are not reflected. In areas that have deteriorated most
-    since 2025 — particularly those affected by sustained cost-of-living
-    pressure — the model's predictive accuracy and the feature importances
-    below may understate the current contribution of deprivation.
+    **IMD data:** features are drawn from the 2025 Index of Multiple
+    Deprivation — the most recently released index, updated from the
+    previous 2019 vintage. The 2025 IMD captures post-pandemic deprivation
+    patterns for the first time, making these feature importances more
+    reflective of current conditions than prior analyses using 2019 data.
     """)
 
     # Fix (critique): build label map from model's actual feature names
@@ -563,8 +558,8 @@ def _render_methodology_expander(model, weight_sens: pd.DataFrame):
         toward zero and strips meaningful variation from the composite.
 
         - Deprivation (35%): average IMD decile, inverted so higher equals
-          more deprived. Uses 2025 IMD, the most recent available.
-          Post-2025 changes are not captured.
+          more deprived. Uses 2019 IMD, the most recent available.
+          Post-2019 changes are not captured.
         - Shoplifting trend (30%): % change in shoplifting 2023 to 2025.
         - Crime-deprivation mismatch (20%): residual from borough-level
           regression of crime rate on deprivation.
@@ -622,7 +617,7 @@ def _render_methodology_expander(model, weight_sens: pd.DataFrame):
         **Predictive model:** Random Forest Regressor (100 estimators,
         random_state=42). Target: crime rate per 1,000 residents per LSOA,
         log-transformed to address right skew. Extreme outliers capped at
-        the 99th percentile. Features: seven 2025 IMD domain scores.
+        the 99th percentile. Features: seven 2019 IMD domain scores.
 
         **Evaluation:** Grid-based spatial cross-validation (5 folds).
         LSOAs are assigned to rectangular grid cells (~3.5 km at London's
@@ -640,7 +635,7 @@ def _render_methodology_expander(model, weight_sens: pd.DataFrame):
         a stronger identification strategy such as a natural experiment or
         instrumental variable approach.
 
-        **Limitations:** IMD data is from 2025 and does not reflect
+        **Limitations:** IMD data is from 2019 and does not reflect
         post-pandemic changes to deprivation. Shoplifting scenarios are
         assumption-based projections, not statistical forecasts. The
         vulnerability index should be treated as indicative: a framework

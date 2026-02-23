@@ -38,9 +38,12 @@ from utils.helpers import get_ethnicity_val
 def render():
     st.title("Policing Response")
     st.markdown("""
-    Stop and search is one of the most visible and most contested tools
-    available to the Metropolitan Police. The data raises questions about
-    who is being stopped, why, and whether it is working.
+    The Metropolitan Police conducted hundreds of thousands of stop and
+    searches between 2023 and 2025. Most found nothing. Black Londoners
+    were stopped at more than four times their population share — and their
+    arrest rate was almost identical to White Londoners. This section
+    examines who is being stopped, whether it is working, and what the
+    August 2024 drugs spike tells us about policing strategy.
     """)
 
     data = load_policing_data()
@@ -89,10 +92,8 @@ def render():
     col1.metric("Total stop and searches",     f"{total_searches:,}",  delta_color="off")
     col2.metric("Result in no further action", f"{no_action_rate}%",   delta_color="off")
     col3.metric(
-        "Black people as % of stops",
-        f"{black_stop_pct}%",
-        f"vs {black_pop_pct}% of London population",
-        delta_color="off",
+        f"Black people: {black_stop_pct}% of stops vs {black_pop_pct}% of population",
+        f"{black_ratio:.1f}× overrepresented",
     )
 
     st.divider()
@@ -144,11 +145,12 @@ def _render_ethnicity_chart(
     black_ratio, black_arrest_rate, white_arrest_rate,
     r_dep_black: float,
 ):
-    st.subheader("1. Who is being stopped?")
+    st.subheader("1. Black Londoners are stopped at four times their population share")
     st.markdown("""
-    The ethnic breakdown of stop and search in London is significantly skewed
-    relative to the population. The chart compares the percentage of stops
-    with each group's share of London's population, based on the 2021 Census.
+    Red bars show each group's share of stops; grey bars show their share
+    of London's population. The gap between the two is the disparity.
+    For Black Londoners it is the largest by a wide margin — and it is
+    consistent across all three years in the data.
     """)
 
     fig = go.Figure()
@@ -214,11 +216,13 @@ def _render_effectiveness_chart(
     outcomes_by_search, arrest_rate, total_searches, drug_search_pct,
     r_crime_search: float,
 ):
-    st.subheader("2. Is stop and search an effective tool?")
+    st.subheader("2. Most stops find nothing — but targeting makes the difference")
     st.markdown(f"""
-    Across all {total_searches:,} searches, only {arrest_rate}% resulted in
-    an arrest. Effectiveness varies significantly by what police are
-    searching for.
+    Across {total_searches:,} searches, only {arrest_rate}% resulted in an
+    arrest. That average hides large variation. Intelligence-led searches
+    for stolen goods produce arrests in roughly one in four stops.
+    High-volume drug searches — the most common type — produce arrests
+    in roughly one in eight.
     """)
 
     outcomes_plot = outcomes_by_search[
@@ -280,19 +284,17 @@ def _render_drugs_comparison_chart(
     before_searches, after_searches,
     changepoint_hypotheses: pd.DataFrame,
 ):
-    st.subheader("3. Three possible explanations for the August 2024 drugs spike")
+    st.subheader("3. The August 2024 drugs spike: more crime, or more recording?")
     st.markdown("""
-    The Economic Crime section identified a sudden and sustained increase in
-    recorded drug offences from August 2024. The stop and search data helps
-    examine three competing explanations. The table below shows what each
-    explanation would predict — and what the data actually shows.
+    Drug offences jumped in August 2024 and stayed high. Three explanations
+    are plausible: more enforcement, changed recording practice, or genuinely
+    more drug activity. The table below tests each against what the stop and
+    search data actually shows.
 
-    **Important caveat:** the hypothesis table tests these explanations against
-    stop and search data alone. None of the three tests is conclusive in
-    isolation. In particular, if Operation Yamata specifically targeted supply
-    networks (where arrest rates are structurally higher than for possession
-    searches), arrest rates might not fall even under the recording-change
-    hypothesis. Treat each row as one piece of evidence, not a verdict.
+    Note: none of these tests is conclusive on its own — Operation Yamata
+    targeted supply networks where arrest rates are structurally higher,
+    which complicates the recording-change test. Read each row as one piece
+    of evidence, not a verdict.
     """)
 
     fig = go.Figure()
@@ -397,13 +399,13 @@ def _render_borough_map(
     ss_borough, top_borough, highest_arrest_borough,
     r_crime_search: float,
 ):
-    st.subheader("4. Where is stop and search concentrated?")
+    st.subheader("4. High volume, low effectiveness: the geographic picture")
     st.markdown("""
-    Stop and search is not evenly distributed across London. The map shows
-    total searches per borough with colour indicating arrest rate. A large
-    bubble in red indicates high-volume, low-effectiveness searching.
-    A large bubble in green indicates high-volume searching that is producing
-    results.
+    Bubble size is total searches; colour is arrest rate. Large red bubbles
+    are boroughs with high-volume searching that is not converting to
+    arrests. Large green bubbles are boroughs where activity is more
+    targeted and productive. The contrast tells you something about
+    how intelligence-led the local approach is.
     """)
 
     fig = px.scatter_mapbox(

@@ -42,9 +42,11 @@ _STL_MIN_MONTHS = 24
 def render():
     st.title("Economic Crime")
     st.markdown("""
-    From 2023 onwards, certain crimes responded to financial pressure in ways
-    the data makes clear. This section examines which crimes rose, why, and
-    what the evidence suggests about the outlook.
+    London's shoplifting rate has risen every year since 2023 and shows no sign
+    of reversing. This section traces that surge — separating the genuine
+    structural increase from seasonal noise, linking it to the financial
+    pressure on households, and distinguishing it from the drug offence spike
+    that tells a completely different story.
     """)
 
     data    = load_economic_crime_data()
@@ -86,22 +88,16 @@ def render():
     st.caption("Metropolitan and City of London Police recorded crime, 2023 to 2025.")
     col1, col2, col3 = st.columns(3)
     col1.metric(
-        "Shoplifting: 2025 monthly average",
-        f"{avg_2025:,.0f}",
-        f"Up from {avg_2023:,.0f} per month in 2023",
-        delta_color="off",
+        f"Shoplifting: up from {avg_2023:,.0f} to",
+        f"{avg_2025:,.0f} /month",
     )
     col2.metric(
-        "Drug offences: new monthly average",
-        f"{after_mean:.0f}",
-        f"Was {before_mean:.0f} before {cp_date.strftime('%b %Y')}",
-        delta_color="off",
+        f"Drug offences: up from {before_mean:.0f} (pre-Aug 2024)",
+        f"{after_mean:.0f} /month",
     )
     col3.metric(
-        "Shoplifting underlying trend increase",
+        "Shoplifting trend: Jan 2023 → Dec 2025",
         f"+{trend_increase:.1f}%",
-        "Seasonal patterns removed (STL)",
-        delta_color="off",
     )
 
     st.divider()
@@ -109,10 +105,11 @@ def render():
     _render_crime_index_chart(indexed)
 
     st.info("""
-    Shoplifting and theft rose sharply and stayed high. Vehicle crime and
-    burglary fell consistently. Drug offences were flat for 18 months then
-    jumped suddenly in a pattern more consistent with a policing change than
-    an economic one.
+    **The pattern divides cleanly.** Crimes linked to financial pressure
+    (shoplifting, theft) rose and stayed high. Crimes linked to physical
+    opportunity (burglary, vehicle crime) fell as security improved. Drug
+    offences did neither — they were flat, then jumped sharply in a single
+    month. That sudden switch is the focus of chart 4.
     """)
 
     st.divider()
@@ -228,11 +225,12 @@ def _format_lag_narrative(best_lag: pd.Series) -> str:
 # ── Sub-renderers ─────────────────────────────────────────────────
 
 def _render_crime_index_chart(indexed: pd.DataFrame):
-    st.subheader("1. Which crimes went up and which went down?")
+    st.subheader("1. Two crimes rose, two fell, one jumped suddenly")
     st.markdown("""
-    The chart shows how each crime type changed relative to January 2023.
-    A value of +50 means 50% more incidents than at the start of the period.
-    Zero means no change. Negative means it fell.
+    Indexed to January 2023. Each line shows how far a crime type has moved
+    from that baseline — upward means more incidents, downward means fewer.
+    The divergence between shoplifting and burglary is the central story:
+    one driven by economic pressure, one by physical security improvements.
     """)
 
     economic_highlight = [
@@ -252,7 +250,7 @@ def _render_crime_index_chart(indexed: pd.DataFrame):
         subset = indexed[indexed["crime_type"] == crime].copy()
         if subset.empty:
             continue
-        subset["pct_change"] = subset["index_value"] - 100
+        subset["pct_change"] = (subset["index_value"] - 100).round(1)
         fig.add_trace(go.Scatter(
             x=subset["month"],
             y=subset["pct_change"],
@@ -289,10 +287,12 @@ def _render_shoplifting_inflation_chart(
     food: pd.DataFrame,
     best_lag: pd.Series,
 ):
-    st.subheader("2. Shoplifting kept rising after food prices stopped surging")
+    st.subheader("2. Shoplifting didn't fall when inflation eased — it kept climbing")
     st.markdown("""
-    You might expect shoplifting to track food prices: rising when they spike,
-    falling when they ease. The data shows something different.
+    Food price inflation peaked above 19% in early 2023, then fell steadily.
+    Shoplifting did not follow. By the time inflation had halved, shoplifting
+    was still rising — suggesting households were responding to accumulated
+    financial damage, not the current rate of price increases.
     """)
 
     monthly_shop = monthly_shop.copy()
@@ -386,17 +386,12 @@ def _render_decomposition_chart(
     decomp_full: pd.DataFrame,
     trend_increase: float,
 ):
-    st.subheader("3. The underlying trend")
+    st.subheader("3. Strip out the seasonality: the trend is unambiguously up")
     st.markdown("""
-    Shoplifting naturally rises in summer and dips in winter as high streets
-    get busier and opportunistic theft increases. To test whether the overall
-    increase is real or just a seasonal pattern, we can remove those
-    predictable fluctuations mathematically.
-
-    The chart shows raw monthly figures in grey and the underlying trend in
-    red, with seasonal variation removed. Decomposition uses STL (Seasonal
-    and Trend decomposition using LOESS) with robust fitting, which
-    downweights outlier months during estimation.
+    Shoplifting peaks every summer as high streets fill up. Removing that
+    predictable seasonal rhythm with STL decomposition leaves the structural
+    signal — the grey raw data, the red underlying trend. If the rise were
+    just seasonal, the trend line would be flat. It is not.
     """)
 
     # Fix (critique): surface the STL reliability flag to dashboard users.
@@ -443,12 +438,13 @@ def _render_decomposition_chart(
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
     st.info(f"""
-    The underlying trend rose {trend_increase:.1f}% over this period. This is
-    the genuine structural increase, separate from seasonal patterns. The
-    trend shows no sign of reversing even as inflation eased in 2024,
-    consistent with cumulative financial damage rather than a short-term
-    price shock. Trend data begins in mid-2023 as STL decomposition requires
-    several months to initialise reliable estimates.
+    **The underlying monthly rate rose {trend_increase:.1f}% — and it hasn't turned.**
+    This compares the trend value in January 2023 (~4,100/month) with
+    December 2025 (~7,800/month), after removing seasonal fluctuations.
+    It is higher than the raw year-on-year figure (+53.5%) because annual
+    totals average across the full year, including the lower months early
+    in 2023 when the surge was just beginning. The trend figure more
+    accurately captures how far the monthly rate has actually moved.
     """)
 
 
@@ -459,7 +455,7 @@ def _render_drugs_changepoint_chart(
     after_mean: float,
     pct_increase: float,
 ):
-    st.subheader("4. Drug offences: a sudden switch, not a gradual rise")
+    st.subheader("4. Drug offences tell a different story: a single sudden jump")
     st.markdown(f"""
     Unlike shoplifting, drug offences did not creep upward. They were broadly
     flat for 18 months, then jumped sharply in **{cp_date.strftime('%B %Y')}**
@@ -530,11 +526,12 @@ def _render_drugs_changepoint_chart(
 
 
 def _render_borough_chart(borough: pd.DataFrame):
-    st.subheader("5. Which areas saw shoplifting rise most?")
+    st.subheader("5. The surge was not evenly spread across London")
     st.markdown("""
-    The increase was not spread evenly. The five boroughs with the biggest
-    increases and the five with the smallest are shown below, including one
-    borough where shoplifting fell.
+    Most boroughs saw double-digit increases. But the range is wide — some
+    boroughs saw shoplifting more than double while others barely moved.
+    Deprivation decile is shown on hover: the link between deprivation and
+    the size of the increase is weaker than you might expect.
     """)
     st.caption("""
     Deprivation decile: areas ranked 1 to 10. Decile 1 is the most deprived

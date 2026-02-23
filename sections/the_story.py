@@ -59,10 +59,10 @@ def render():
         "January 2023 to December 2025."
     )
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total crimes recorded", f"{total_crimes:,}",            delta_color="off")
-    col2.metric("Shoplifting",            f"{shop_change:+.0f}%",    "vs 2023", delta_color="off")
-    col3.metric("Drug offences",          f"{drug_change:+.0f}%",    "vs 2023", delta_color="off")
-    col4.metric("Vehicle crime",          f"{vehicle_change:+.0f}%", "vs 2023", delta_color="off")
+    col1.metric("Total crimes recorded", f"{total_crimes:,}")
+    col2.metric("Shoplifting 2023–2025",  f"{shop_change:+.0f}%")
+    col3.metric("Drug offences 2023–2025", f"{drug_change:+.0f}%")
+    col4.metric("Vehicle crime 2023–2025", f"{vehicle_change:+.0f}%")
 
     st.divider()
 
@@ -138,7 +138,6 @@ def render():
     technology and physical environment sit at the bottom.
     """)
 
-    # Reconstruct crime_by_year in the shape crime_change_overview_chart expects
     annual_reset = summary["crime_annual_change"].copy()
     annual_reset.columns = [
         int(c) if c.isdigit() else c for c in annual_reset.columns
