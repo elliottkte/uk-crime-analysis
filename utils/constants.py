@@ -3,6 +3,18 @@ utils/constants.py
 ------------------
 Shared constants used across the dashboard sections.
 Import from here rather than defining locally in section files.
+
+Fix (critique): IMD_DOMAIN_LABELS previously used short keys like
+'imd_score', 'income_score' that did not match the actual long column
+names produced by the IMD CSV after keyword matching in script 04.
+This caused _render_model_importance in where_headed.py to silently
+produce empty bars when model.feature_names_in_ was used.
+
+The mapping is now keyed on the actual IMD column name substrings
+that the DOMAIN_KEYWORDS matching in 04_train_model.py would produce,
+with a runtime fallback in data_loaders.build_imd_label_map() that
+constructs the label map from the model's stored feature_names_in_
+so there is no dependency on these keys being exact.
 """
 
 # ── Plotly chart config ───────────────────────────────────────────
@@ -56,14 +68,38 @@ VULNERABILITY_RENAME = {
 }
 
 # ── IMD domain display labels ─────────────────────────────────────
+# Fix (critique): previously used short keys ('imd_score', 'income_score')
+# that did not match actual IMD column names from the raw CSV, causing
+# the feature importance chart to silently display wrong/empty labels.
+#
+# This mapping now uses lowercase substrings of the actual column names
+# as keys. build_imd_label_map() in data_loaders.py uses this to
+# construct a {actual_feature_name: display_label} dict at runtime by
+# matching each feature name against these substrings, so the chart
+# labels work regardless of the exact column name in the raw IMD file.
+#
+# Do not change these keys without also updating build_imd_label_map().
 IMD_DOMAIN_LABELS = {
-    'imd_score':         'Overall deprivation',
-    'income_score':      'Income deprivation',
-    'employment_score':  'Employment deprivation',
-    'education_score':   'Education & skills',
-    'health_score':      'Health deprivation',
-    'barriers_score':    'Barriers to housing',
-    'living_env_score':  'Living environment',
+    'index of multiple deprivation (imd) score': 'Overall deprivation',
+    'income score':                               'Income deprivation',
+    'employment score':                           'Employment deprivation',
+    'education, skills and training score':       'Education & skills',
+    'health deprivation and disability score':    'Health deprivation',
+    'barriers to housing and services score':     'Barriers to housing',
+    'living environment score':                   'Living environment',
+}
+
+# Fallback short display labels used when a feature name does not
+# match any key in IMD_DOMAIN_LABELS. build_imd_label_map() will
+# return the raw feature name if no match is found.
+IMD_DOMAIN_SHORT_LABELS = {
+    'imd':         'Overall deprivation',
+    'income':      'Income deprivation',
+    'employment':  'Employment deprivation',
+    'education':   'Education & skills',
+    'health':      'Health deprivation',
+    'barriers':    'Barriers to housing',
+    'living':      'Living environment',
 }
 
 # ── Date range covered by the dashboard ──────────────────────────

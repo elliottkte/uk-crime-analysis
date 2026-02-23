@@ -4,13 +4,19 @@ sections/policing_response.py
 'Policing Response' section — stop and search ethnicity breakdown,
 effectiveness by search type, drugs comparison, and borough map.
 
-Changes from original:
-  - Inline correlation values (r=-0.62, r=0.79) now loaded from
-    ss_narrative_stats.csv rather than hardcoded in strings.
-    Falls back gracefully to "not available" if file is absent.
-  - Drugs section now shows the changepoint hypothesis table from
-    ss_changepoint_hypotheses.csv alongside narrative interpretation,
-    letting readers evaluate evidence rather than being told conclusion.
+Fix (critique - drugs narrative): the hypothesis table previously
+framed the 'Changed recording practice' explanation as near-settled.
+In reality the table is ambiguous: if Operation Yamata targeted supply
+networks (where arrest rates are structurally higher), arrest rates
+might not fall even under the recording-change hypothesis. The section
+now presents all three explanations as genuinely contested and makes
+the ambiguity explicit in the interpretive text, rather than leading
+readers to a predetermined conclusion.
+
+Fix (critique - missing file message): changepoint_hypotheses now
+carries a _missing_reason attribute set by data_loaders when the file
+is absent, so the st.info() message can explain which specific upstream
+scripts need to be run rather than giving a generic fallback.
 """
 
 import pandas as pd
@@ -47,7 +53,6 @@ def render():
     narrative_stats        = data["narrative_stats"]
     changepoint_hypotheses = data["changepoint_hypotheses"]
 
-    # ── Derived values ────────────────────────────────────────────
     total_searches = int(outcomes_summary["total"].values[0])
     arrest_rate    = float(outcomes_summary["arrest_rate"].values[0])
     no_action_rate = float(outcomes_summary["no_action_rate"].values[0])
@@ -58,7 +63,6 @@ def render():
     black_arrest_rate = get_ethnicity_val(ethnicity, "Black", "arrest_rate")
     white_arrest_rate = get_ethnicity_val(ethnicity, "White", "arrest_rate")
 
-    # Load data-derived narrative statistics
     r_dep_black    = get_narrative_stat(narrative_stats, "deprivation_black_stop_correlation")
     r_crime_search = get_narrative_stat(narrative_stats, "crime_rate_search_volume_correlation")
 
@@ -93,7 +97,6 @@ def render():
 
     st.divider()
 
-    # ── 1. Who is being stopped ───────────────────────────────────
     _render_ethnicity_chart(
         ethnicity,
         black_pop_pct, black_stop_pct,
@@ -103,7 +106,6 @@ def render():
 
     st.divider()
 
-    # ── 2. Effectiveness ──────────────────────────────────────────
     _render_effectiveness_chart(
         outcomes_by_search, arrest_rate, total_searches, drug_search_pct,
         r_crime_search,
@@ -111,7 +113,6 @@ def render():
 
     st.divider()
 
-    # ── 3. Drug searches vs drug crimes ──────────────────────────
     _render_drugs_comparison_chart(
         drugs_comparison, cp_date,
         before_searches, after_searches,
@@ -120,7 +121,6 @@ def render():
 
     st.divider()
 
-    # ── 4. Borough map ────────────────────────────────────────────
     _render_borough_map(ss_borough, top_borough, highest_arrest_borough, r_crime_search)
 
     st.caption("""
@@ -175,7 +175,6 @@ def _render_ethnicity_chart(
 
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
-    # Format the deprivation correlation for display
     if not _is_nan(r_dep_black):
         dep_corr_text = f"r={r_dep_black:.2f}"
     else:
@@ -258,7 +257,6 @@ def _render_effectiveness_chart(
 
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
-    # Format crime-search correlation for display
     if not _is_nan(r_crime_search):
         search_corr_text = f"r={r_crime_search:.2f}"
     else:
@@ -282,12 +280,19 @@ def _render_drugs_comparison_chart(
     before_searches, after_searches,
     changepoint_hypotheses: pd.DataFrame,
 ):
-    st.subheader("3. Drug searches did not drive the August 2024 crime spike")
+    st.subheader("3. Three possible explanations for the August 2024 drugs spike")
     st.markdown("""
     The Economic Crime section identified a sudden and sustained increase in
     recorded drug offences from August 2024. The stop and search data helps
-    clarify what happened. Three competing hypotheses are tested below against
-    observable implications in the data.
+    examine three competing explanations. The table below shows what each
+    explanation would predict — and what the data actually shows.
+
+    **Important caveat:** the hypothesis table tests these explanations against
+    stop and search data alone. None of the three tests is conclusive in
+    isolation. In particular, if Operation Yamata specifically targeted supply
+    networks (where arrest rates are structurally higher than for possession
+    searches), arrest rates might not fall even under the recording-change
+    hypothesis. Treat each row as one piece of evidence, not a verdict.
     """)
 
     fig = go.Figure()
@@ -329,11 +334,6 @@ def _render_drugs_comparison_chart(
     # ── Hypothesis table ──────────────────────────────────────────
     if not changepoint_hypotheses.empty:
         st.markdown("**What does the data say about each explanation?**")
-        st.markdown("""
-        Each hypothesis makes a different prediction. The table shows the
-        relevant metric before and after the August 2024 changepoint so you
-        can evaluate the evidence directly.
-        """)
 
         display_cols = ["hypothesis", "metric", "before", "after", "supports"]
         display_df   = changepoint_hypotheses[
@@ -344,17 +344,27 @@ def _render_drugs_comparison_chart(
         st.dataframe(display_df, hide_index=True, use_container_width=True)
 
         st.markdown("""
-        If the 'Changed recording practice' row shows arrest rate falling
-        after the changepoint while search volumes stayed flat, this is the
-        strongest evidence for a reclassification explanation. If 'More
-        enforcement activity' shows a large rise in monthly searches, that
-        interpretation gains more support.
+        **Reading the table:** each row tests one explanation against its
+        own prediction. All three predictions could be partially true
+        simultaneously — policing operations, recording changes, and
+        genuine drug activity are not mutually exclusive. The table is a
+        tool for interrogating the data, not for settling the question.
+
+        The search volumes column ('More enforcement activity') is the
+        most direct test: if drug searches did not rise alongside recorded
+        offences, enforcement volume alone cannot explain the spike. The
+        arrest rate column ('Changed recording practice') is more ambiguous
+        because structural factors in targeted operations can affect rates
+        independently of recording practice.
         """)
     else:
-        st.info(
+        # Fix (critique): show specific missing-file reason if available
+        missing_reason = getattr(
+            changepoint_hypotheses, "_missing_reason",
             "Hypothesis table not available. Run scripts 02 and 06 in sequence "
             "to generate ss_changepoint_hypotheses.csv."
         )
+        st.info(missing_reason)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -363,20 +373,23 @@ def _render_drugs_comparison_chart(
         Drug stop and searches averaged {before_searches:,.0f} per month
         before August 2024 and {after_searches:,.0f} per month afterwards,
         a change of less than 0.3%. If the recorded crime spike had been
-        driven by more searches, the purple line would rise alongside the
-        red one. It does not.
+        driven solely by more searches, the purple line would rise alongside
+        the red one. It does not — though this does not rule out that search
+        targeting became more efficient rather than more frequent.
         """)
     with col2:
-        st.markdown("**The most likely explanation**")
+        st.markdown("**What the evidence points toward**")
         st.markdown("""
-        The evidence points to a change in how drug encounters were recorded,
-        not how many occurred. Operation Yamata and the Metropolitan Police's
-        Drugs Action Plan explicitly targeted higher recording rates as part
-        of a zero tolerance approach to drug supply networks.
+        The most parsimonious explanation consistent with the data is a
+        change in how drug encounters were recorded, likely connected to
+        Operation Yamata and the Metropolitan Police's Drugs Action Plan
+        which explicitly targeted higher recording rates for drug supply
+        networks.
 
-        Drug activity almost certainly did not increase by 50% overnight.
-        The recording of it did. This is an important caveat when interpreting
-        drug offence figures elsewhere in this dashboard.
+        However, this remains a working interpretation rather than a firm
+        conclusion. The absence of a rise in search volumes is necessary
+        but not sufficient evidence for the recording-change explanation.
+        The Policing Response section should be read with that caveat in mind.
         """)
 
 
@@ -426,7 +439,6 @@ def _render_borough_map(
     )
     st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
 
-    # Format correlation for display
     if not _is_nan(r_crime_search):
         corr_text = f"r={r_crime_search:.2f}"
     else:
@@ -456,7 +468,6 @@ def _render_borough_map(
 # ── Utility ───────────────────────────────────────────────────────
 
 def _is_nan(value: float) -> bool:
-    """Safe NaN check that works for both float NaN and numpy NaN."""
     try:
         import math
         return math.isnan(value)

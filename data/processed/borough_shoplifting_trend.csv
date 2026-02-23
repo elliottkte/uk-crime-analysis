@@ -1,88 +1,89 @@
 borough,count_2023,count_2025,change_pct,avg_imd_decile
-Ashford,1,0,-100.0,5.7
-Barking and Dagenham,1059,721,-31.9,2.7
-Barnet,1976,2865,45.0,6.4
-Basingstoke and Deane,0,1,,7.4
-Bexley,1087,1612,48.3,6.5
+Ashford,1,0,-100.0,5.5
+Barking and Dagenham,1210,843,-30.3,3.1
+Barnet,1993,2875,44.3,5.5
+Basingstoke and Deane,0,1,,7.3
+Bexley,1111,1634,47.1,6.8
 Blackburn with Darwen,0,1,,3.3
 Bolton,0,0,,4.2
-Boston,1,0,-100.0,4.6
-Brent,1703,2184,28.2,4.2
-Brentwood,1,0,-100.0,8.0
-Bromley,2206,2490,12.9,7.1
+Boston,1,0,-100.0,3.8
+Brent,1883,2785,47.9,3.5
+Brentwood,1,0,-100.0,7.6
+Bromley,2352,2747,16.8,7.4
 Broxbourne,1,1,0.0,5.9
-Broxtowe,0,0,,6.9
-Camden,2118,3598,69.9,5.4
-Cannock Chase,0,1,,5.2
-Canterbury,0,1,,6.1
-Chelmsford,0,1,,7.5
-Cheltenham,0,1,,7.0
+Broxtowe,0,0,,7.0
+Buckinghamshire,2,0,-100.0,7.4
+Camden,2102,3598,71.2,4.8
+Cannock Chase,0,1,,5.3
+Canterbury,0,1,,5.7
+Chelmsford,0,1,,7.2
+Cheltenham,0,1,,7.4
 Cheshire East,1,0,-100.0,7.1
-City of London,972,1685,73.4,6.7
-Cornwall,1,0,-100.0,4.5
-County Durham,0,1,,4.3
-Croydon,1966,2197,11.7,5.0
-Dartford,1,1,0.0,5.8
-Ealing,1722,2007,16.6,4.8
-East Hertfordshire,0,2,,8.6
-East Lindsey,0,0,,3.8
-Elmbridge,1,2,100.0,8.7
-Enfield,1520,2593,70.6,4.4
-Epping Forest,1,2,100.0,6.6
+City of London,972,1685,73.4,7.8
+Cornwall,1,0,-100.0,4.7
+County Durham,0,1,,4.0
+Croydon,2325,2803,20.6,5.1
+Dartford,1,1,0.0,6.0
+Ealing,1724,2056,19.3,4.2
+East Hertfordshire,0,2,,8.0
+East Lindsey,0,0,,3.7
+Elmbridge,1,2,100.0,8.6
+Enfield,1518,2594,70.9,4.0
+Epping Forest,1,2,100.0,6.9
+Epsom and Ewell,0,1,,8.5
 Exeter,1,0,-100.0,6.4
-Greenwich,1566,1833,17.0,4.3
-Hackney,988,1940,96.4,2.7
-Hammersmith and Fulham,1457,2271,55.9,4.8
-Haringey,1706,2421,41.9,3.9
+Greenwich,1797,2296,27.8,4.6
+Hackney,1036,2055,98.4,3.2
+Hammersmith and Fulham,1458,2279,56.3,5.1
+Haringey,1758,2461,40.0,3.8
 Harlow,2,0,-100.0,4.8
-Harrow,886,1478,66.8,6.6
-Havering,1851,2114,14.2,6.3
+Harrow,915,1540,68.3,5.9
+Havering,1929,2170,12.5,6.4
 "Herefordshire, County of",0,0,,5.5
-Hertsmere,0,0,,6.9
-High Peak,0,1,,6.6
-Hillingdon,1697,2386,40.6,5.9
+Hertsmere,0,0,,6.8
+High Peak,0,1,,6.0
+Hillingdon,1851,2629,42.0,5.4
 Horsham,0,1,,8.1
-Hounslow,1675,2333,39.3,4.8
-Huntingdonshire,1,0,-100.0,7.4
-Islington,1705,2950,73.0,3.6
-Kensington and Chelsea,1554,3125,101.1,5.2
-"Kingston upon Hull, City of",0,2,,3.0
-Kingston upon Thames,1026,1627,58.6,7.6
-Lambeth,1687,3101,83.8,3.9
-Leicester,2,0,-100.0,3.6
-Lewisham,1976,1765,-10.7,3.8
-Liverpool,1,0,-100.0,2.8
-Luton,1,0,-100.0,4.3
-Manchester,0,0,,2.5
-Melton,3,0,-100.0,7.4
-Merton,1070,1311,22.5,6.9
-Newham,1162,2498,115.0,3.1
-North Tyneside,1,0,-100.0,5.5
-North Warwickshire,0,0,,5.8
-Oxford,0,1,,6.3
-Redbridge,1321,2176,64.7,6.0
-Richmond upon Thames,892,1199,34.4,8.3
+Hounslow,1693,2539,50.0,4.2
+Huntingdonshire,1,0,-100.0,7.5
+Islington,1837,3208,74.6,3.8
+Kensington and Chelsea,1553,3125,101.2,5.4
+"Kingston upon Hull, City of",0,2,,3.4
+Kingston upon Thames,1026,1628,58.7,7.8
+Lambeth,1704,3169,86.0,4.5
+Leicester,2,0,-100.0,3.1
+Lewisham,2168,2014,-7.1,4.1
+Liverpool,1,0,-100.0,3.4
+Luton,1,0,-100.0,4.0
+Manchester,0,0,,3.0
+Melton,3,0,-100.0,6.5
+Merton,1211,1498,23.7,6.9
+Newham,2037,4365,114.3,3.1
+North Tyneside,1,0,-100.0,5.6
+North Warwickshire,0,0,,5.4
+Oxford,0,1,,6.8
+Redbridge,1326,2183,64.6,5.6
+Richmond upon Thames,892,1199,34.4,8.2
 Runnymede,0,0,,7.3
-Sevenoaks,0,1,,7.4
-Sheffield,0,1,,4.8
-Slough,0,2,,4.5
-South Bucks,2,0,-100.0,8.1
-South Cambridgeshire,0,1,,8.4
-South Kesteven,0,1,,7.2
+Sevenoaks,0,1,,6.7
+Sheffield,0,1,,4.9
+Slough,0,2,,4.6
+South Cambridgeshire,0,1,,8.1
+South Kesteven,0,1,,6.7
 South Norfolk,0,1,,6.9
-Southwark,1298,2296,76.9,4.0
-Spelthorne,3,2,-33.3,6.6
-St Albans,0,0,,8.5
-Stockport,0,0,,5.9
-Sutton,781,991,26.9,7.1
-Tandridge,1,0,-100.0,7.4
+Southwark,1394,2493,78.8,4.6
+Spelthorne,3,3,0.0,6.5
+St Albans,0,0,,8.4
+Stockport,0,0,,6.4
+Sutton,934,1211,29.7,7.1
+Tandridge,2,0,-100.0,7.1
 Thurrock,2,3,50.0,5.3
-Tower Hamlets,1372,2227,62.3,3.7
-Uttlesford,1,0,-100.0,8.2
-Wakefield,1,0,-100.0,4.3
-Waltham Forest,1112,2050,84.4,4.1
-Wandsworth,1505,2606,73.2,6.2
-West Lindsey,1,1,0.0,5.7
-Westminster,4030,5947,47.6,5.5
-Wigan,1,0,-100.0,4.9
-Windsor and Maidenhead,0,1,,8.5
+Tower Hamlets,1454,2531,74.1,3.5
+Uttlesford,1,0,-100.0,7.9
+Wakefield,1,0,-100.0,4.4
+Waltham Forest,1172,2181,86.1,4.5
+Wandsworth,1598,2805,75.5,6.7
+West Lindsey,1,1,0.0,5.3
+Westminster,3896,5951,52.7,4.8
+Wigan,1,0,-100.0,5.0
+Windsor and Maidenhead,0,1,,8.3

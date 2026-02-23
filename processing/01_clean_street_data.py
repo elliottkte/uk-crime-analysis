@@ -12,6 +12,12 @@ named e.g. 2023-01-metropolitan-street.csv
 
 Run from project root:
     python processing/01_clean_street_data.py
+
+Fix (critique): extract_force() previously used parts[2] which
+misclassifies City of London files ('city-of-london-police-street.csv'
+splits to 'city' at index 2 but multi-word force names were fragile).
+Now uses explicit substring matching so both forces are reliably
+identified regardless of filename variation.
 """
 
 import os
@@ -41,6 +47,14 @@ EXPECTED_CRIME_TYPES = {
 
 DATE_RANGE = ("2023-01-01", "2025-12-31")
 
+# ── Known force name tokens in police.uk filenames ────────────────
+# Maps substring found in basename → canonical force label.
+# Checked in order: more-specific patterns first.
+_FORCE_PATTERNS = [
+    ("city-of-london", "city-of-london"),
+    ("metropolitan",   "metropolitan"),
+]
+
 
 # ── Helpers ───────────────────────────────────────────────────────
 
@@ -58,13 +72,20 @@ def find_street_files(raw_dir: str) -> list:
 
 def extract_force(filepath: str) -> str:
     """
-    Extract force name from filename.
-    Matches notebook: os.path.basename(file).split('-')[2]
-    e.g. '2023-01-metropolitan-street.csv'  -> 'metropolitan'
-         '2023-01-city-of-london-street.csv' -> 'city'
+    Extract force name from filename using substring matching.
+
+    Previous implementation used parts[2] (positional split on '-'),
+    which was fragile for 'city-of-london' filenames where parts[2]
+    is 'london' rather than 'city'. Explicit substring matching is
+    unambiguous regardless of filename variation.
+
+    Returns one of: 'metropolitan', 'city-of-london', or 'unknown'.
     """
-    parts = os.path.basename(filepath).lower().split("-")
-    return parts[2] if len(parts) > 2 else "unknown"
+    basename = os.path.basename(filepath).lower()
+    for token, label in _FORCE_PATTERNS:
+        if token in basename:
+            return label
+    return "unknown"
 
 
 def load_all(files: list) -> pd.DataFrame:
@@ -117,9 +138,16 @@ def validate(df: pd.DataFrame):
     print(f"  Forces:           {sorted(df['force'].unique())}")
     print(f"  Missing lsoa:     {df['lsoa_code'].isna().sum():,}")
 
-    unknown = set(df["crime_type"].unique()) - EXPECTED_CRIME_TYPES
-    if unknown:
-        print(f"  WARNING - unexpected crime types: {unknown}")
+    # Warn on any 'unknown' force rows — indicates unrecognised filenames
+    unknown_force_rows = (df["force"] == "unknown").sum()
+    if unknown_force_rows:
+        print(f"  WARNING - {unknown_force_rows:,} rows have force='unknown'. "
+              "Check that all raw filenames contain 'metropolitan' or "
+              "'city-of-london'.")
+
+    unknown_crime = set(df["crime_type"].unique()) - EXPECTED_CRIME_TYPES
+    if unknown_crime:
+        print(f"  WARNING - unexpected crime types: {unknown_crime}")
     else:
         print(f"  Crime types:      all expected")
 

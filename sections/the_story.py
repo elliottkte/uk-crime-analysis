@@ -172,6 +172,6 @@ def render():
     st.caption("""
     Source: Metropolitan Police & City of London Police via police.uk |
     ONS Population Estimates 2022 |
-    Index of Multiple Deprivation 2019 |
+    Index of Multiple Deprivation 2025 |
     ONS Census 2021
     """)

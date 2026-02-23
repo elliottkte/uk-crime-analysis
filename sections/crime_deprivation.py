@@ -49,7 +49,7 @@ def render():
     # ── Headline metrics ──────────────────────────────────────────
     st.caption(
         "All 33 London boroughs. 2023 to 2025 recorded crime data "
-        "and 2019 English Indices of Deprivation."
+        "and 2025 English Indices of Deprivation."
     )
     col1, col2, col3 = st.columns(3)
     col1.metric("Boroughs analysed",                f"{total_boroughs}", delta_color="off")
@@ -75,7 +75,7 @@ def render():
     st.caption("""
     Source: Metropolitan Police & City of London Police via police.uk |
     Deprivation: Ministry of Housing, Communities & Local Government,
-    English Indices of Deprivation 2019 |
+    English Indices of Deprivation 2025 |
     Correlations calculated at borough level across all 33 London boroughs.
     Association does not imply causation.
     """)

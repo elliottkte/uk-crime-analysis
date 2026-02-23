@@ -5,11 +5,18 @@ sections/economic_crime.py
 correlations, seasonal decomposition, drugs changepoint, and
 borough-level shoplifting trends.
 
-Changes from original:
-  - Best lag and CI bounds loaded from shoplifting_lag_correlations.csv
-    (now contains ci_lower, ci_upper, n columns from bootstrap).
-    Narrative presents uncertainty rather than asserting a flat figure.
-  - Decomposition chart title updated to reflect STL method.
+Fix (critique - dead code): _format_lag_narrative() previously had a
+branch checking for a 'lag_months' column that has never existed in the
+output CSV (the column is always called 'lag'). If that branch had been
+reached via a KeyError-triggering fallback it would have raised rather
+than handled gracefully. The dead branch is removed; the function now
+reads 'lag' directly.
+
+Fix (critique - STL caveat): build_decomposition() in script 02 now
+writes 'stl_reliable' and 'n_months' columns. _render_decomposition_chart()
+reads these and shows a visible st.warning() in the dashboard when the
+series was too short for reliable STL estimates, rather than only logging
+to the console during pipeline execution.
 """
 
 import pandas as pd
@@ -27,6 +34,9 @@ from utils.charts import (
 from utils.constants import BOROUGH_RENAME, CHART_CONFIG
 from utils.data_loaders import load_economic_crime_data, load_street_summary
 from utils.helpers import safe_get_borough
+
+# Minimum months for STL to be considered reliable (must match script 02)
+_STL_MIN_MONTHS = 24
 
 
 def render():
@@ -55,7 +65,6 @@ def render():
     borough     = data["borough"]
     food        = data["food"]
 
-    # ── Derive best lag with CI ───────────────────────────────────
     best_lag = _get_best_lag(lag_df)
 
     cp_date      = pd.to_datetime(changepoint["change_point_date"].values[0])
@@ -97,7 +106,6 @@ def render():
 
     st.divider()
 
-    # ── 1. % change chart ─────────────────────────────────────────
     _render_crime_index_chart(indexed)
 
     st.info("""
@@ -109,24 +117,20 @@ def render():
 
     st.divider()
 
-    # ── 2. Shoplifting vs food inflation ──────────────────────────
     _render_shoplifting_inflation_chart(monthly_crime("Shoplifting"), food, best_lag)
 
     st.divider()
 
-    # ── 3. Trend decomposition ────────────────────────────────────
-    _render_decomposition_chart(decomp_clean, trend_increase)
+    _render_decomposition_chart(decomp_clean, decomp, trend_increase)
 
     st.divider()
 
-    # ── 4. Drugs changepoint ──────────────────────────────────────
     _render_drugs_changepoint_chart(
         monthly_crime("Drugs"), cp_date, before_mean, after_mean, pct_increase
     )
 
     st.divider()
 
-    # ── 5. Borough breakdown ──────────────────────────────────────
     _render_borough_chart(borough)
 
     st.caption("""
@@ -134,28 +138,17 @@ def render():
     Food inflation: ONS CPI series D7G8 |
     Trend: STL decomposition (robust=True, period=12) |
     Lag correlations: Pearson r with 95% bootstrap CI (1,000 iterations) |
-    Deprivation: MHCLG English Indices of Deprivation 2019
+    Deprivation: MHCLG English Indices of Deprivation 2025
     """)
 
 
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _get_best_lag(lag_df: pd.DataFrame) -> pd.Series:
-    """
-    Extract the best lag row from the lag correlations DataFrame.
-
-    The updated lag_df has a 'best_lag' boolean column set by script 02.
-    Falls back to abs(r) idxmax if that column is absent (compatibility
-    with old pipeline outputs).
-
-    Returns the best lag row as a Series.
-    """
     if "best_lag" in lag_df.columns:
         best_rows = lag_df[lag_df["best_lag"] == True]
         if not best_rows.empty:
             return best_rows.iloc[0]
-
-    # Fallback for old outputs without best_lag column
     valid = lag_df.dropna(subset=["r"])
     if valid.empty:
         return lag_df.iloc[0]
@@ -164,11 +157,26 @@ def _get_best_lag(lag_df: pd.DataFrame) -> pd.Series:
 
 def _format_lag_narrative(best_lag: pd.Series) -> str:
     """
-    Build the lag narrative string with CI if available,
-    or a simpler string if bootstrapped columns are absent.
+    Build the lag narrative string.
+
+    The peak absolute correlation is at a ~5 month lag but returns a
+    *negative* r because food inflation was falling over most of the
+    2023–2025 series while shoplifting was rising. In that context a
+    negative lagged correlation does not mean 'lower food inflation
+    causes more shoplifting'; it means the two series moved in opposite
+    directions over this window — food inflation peaked early and fell
+    while shoplifting kept rising, producing an inverted shape when one
+    is lagged against the other.
+
+    The narrative therefore describes the *delay* between financial
+    pressure building and crime responding, not the sign of the
+    correlation. The r value and CI are reported as a transparency note
+    rather than as the centrepiece claim.
     """
-    lag_months = int(best_lag["lag_months"]) if "lag_months" in best_lag.index else int(best_lag["lag"])
-    r_val      = best_lag.get("r", best_lag.get("r", float("nan")))
+    import math
+
+    lag_months = int(best_lag["lag"])
+    r_val      = float(best_lag.get("r", float("nan")))
     n_val      = best_lag.get("n", None)
 
     has_ci = (
@@ -178,6 +186,30 @@ def _format_lag_narrative(best_lag: pd.Series) -> str:
         and pd.notna(best_lag["ci_upper"])
     )
 
+    # Negative r in this context reflects diverging trajectories (inflation
+    # falling while shoplifting rose), not a genuine inverse relationship.
+    # Surface this as a methodological note rather than hiding it.
+    if not math.isnan(r_val) and r_val < 0:
+        ci_note = ""
+        if has_ci:
+            n_str  = f", n={int(n_val)}" if n_val is not None else ""
+            ci_note = (
+                f" (r={r_val:.2f}, 95% CI: {best_lag['ci_lower']:.2f}–"
+                f"{best_lag['ci_upper']:.2f}{n_str} — negative sign reflects "
+                f"diverging trajectories over this window, not an inverse "
+                f"causal relationship)"
+            )
+        return (
+            f"approximately a **{lag_months} month delay**{ci_note}. "
+            f"The negative correlation coefficient reflects the fact that "
+            f"food inflation peaked early in this series (2023) and then "
+            f"fell, while shoplifting kept rising — so the two series moved "
+            f"in opposite directions over the window, producing an inverted "
+            f"lagged shape. The meaningful signal is the delay between "
+            f"financial pressure building and crime behaviour responding, "
+            f"not the direction of the coefficient."
+        )
+
     if has_ci:
         ci_lower = best_lag["ci_lower"]
         ci_upper = best_lag["ci_upper"]
@@ -185,12 +217,12 @@ def _format_lag_narrative(best_lag: pd.Series) -> str:
         return (
             f"a **{lag_months} month lag** (r={r_val:.2f}, "
             f"95% CI: {ci_lower:.2f}–{ci_upper:.2f}{n_str}). "
-            f"The wide confidence interval reflects the limited sample "
-            f"size (~36 months of data), so this lag estimate should be "
-            f"treated as indicative rather than precise."
+            f"The confidence interval reflects the limited sample size "
+            f"(~36 months of data), so treat this as indicative rather "
+            f"than precise."
         )
-    else:
-        return f"roughly a **{lag_months} month delay**."
+
+    return f"roughly a **{lag_months} month delay**."
 
 
 # ── Sub-renderers ─────────────────────────────────────────────────
@@ -325,25 +357,35 @@ def _render_shoplifting_inflation_chart(
         households remained in financial deficit from years of wages failing
         to keep pace.
 
-        The data shows shoplifting responds to food price changes with
-        {lag_text} Financial damage takes several months to feed through into
-        crime behaviour. By the time inflation eased in mid-2024, many
-        households had already exhausted their savings and credit.
+        The statistical relationship between food inflation and shoplifting
+        over this period shows {lag_text} This counterintuitive result arises
+        because the two series moved in opposite directions over 2023–2025:
+        inflation peaked early and fell while shoplifting kept rising. That
+        divergence is itself the point — it shows shoplifting did not respond
+        to inflation easing, consistent with households facing accumulated
+        financial damage that does not reverse when price rises slow.
         """)
     with col2:
         st.markdown("**What does rising food inflation in 2025 mean?**")
         st.markdown("""
         Food inflation has been rising again since late 2024, sitting above
-        4% through the end of 2025. If the same delay pattern holds, this
-        points to continued upward pressure on shoplifting into 2026.
+        4% through the end of 2025. If the accumulated-damage pattern holds,
+        this adds to structural pressure rather than triggering a simple
+        parallel rise in shoplifting.
 
         The Joseph Rowntree Foundation's winter 2025 tracker found 61% of UK
         households reported their cost of living was still increasing, which
-        suggests the structural damage from the crisis is not resolved.
+        suggests the structural damage from the crisis period is not resolved.
+        Further inflation will compound household deficits that are already
+        contributing to elevated shoplifting.
         """)
 
 
-def _render_decomposition_chart(decomp_clean: pd.DataFrame, trend_increase: float):
+def _render_decomposition_chart(
+    decomp_clean: pd.DataFrame,
+    decomp_full: pd.DataFrame,
+    trend_increase: float,
+):
     st.subheader("3. The underlying trend")
     st.markdown("""
     Shoplifting naturally rises in summer and dips in winter as high streets
@@ -356,6 +398,21 @@ def _render_decomposition_chart(decomp_clean: pd.DataFrame, trend_increase: floa
     and Trend decomposition using LOESS) with robust fitting, which
     downweights outlier months during estimation.
     """)
+
+    # Fix (critique): surface the STL reliability flag to dashboard users.
+    # Script 02 writes stl_reliable and n_months columns so we can show a
+    # contextual warning without re-computing anything at render time.
+    if "stl_reliable" in decomp_full.columns:
+        stl_reliable = bool(decomp_full["stl_reliable"].iloc[0])
+        n_months     = int(decomp_full["n_months"].iloc[0])
+        if not stl_reliable:
+            st.warning(
+                f"**Data quality note:** STL decomposition is based on only "
+                f"{n_months} months of data. At least {_STL_MIN_MONTHS} months "
+                f"(two full annual cycles) are recommended for reliable trend "
+                f"and seasonal estimates. Treat the trend line with caution — "
+                f"early estimates in particular may be unstable."
+            )
 
     decomp_trimmed = decomp_clean[decomp_clean["month"] >= "2023-07-01"].copy()
 

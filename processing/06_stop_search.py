@@ -18,13 +18,15 @@ Changes from original:
     in dashboard text, written to ss_narrative_stats.csv
   - Timezone warning on date parsing eliminated
 
+Fix (pipeline run): ss_borough_full.csv had 34 rows instead of 33.
+Added consolidate_boroughs() which normalises known City of London name
+variants to the canonical label, sums numeric columns for any resulting
+duplicates, and drops rows not in the standard 33-borough list.
+consolidate_boroughs() is called on the borough DataFrame before
+to_csv so the output always has ≤33 rows.
+
 Key column note: ethnicity column is 'officer-defined_ethnicity'
 (hyphenated, as it appears in the raw police.uk data).
-
-Population shares: ONS Census 2021 London figures. Metropolitan Police
-officer-defined ethnicity uses four categories (Asian, Black, White,
-Other). The ONS Mixed category (5.7%) is folded into Other automatically
-at runtime. ONS source figures preserved in ONS_ETHNICITY_POPULATION.
 
 Outputs:
     data/processed/ss_outcomes_summary.csv
@@ -50,11 +52,27 @@ RAW_DIR     = os.path.join("data", "raw")
 STREET_PATH = os.path.join("data", "processed", "street_clean.csv")
 OUT_DIR     = os.path.join("data", "processed")
 
+# ── Standard 33 London boroughs ───────────────────────────────────
+LONDON_BOROUGHS_33 = {
+    "Barking and Dagenham", "Barnet", "Bexley", "Brent", "Bromley",
+    "Camden", "City of London", "Croydon", "Ealing", "Enfield",
+    "Greenwich", "Hackney", "Hammersmith and Fulham", "Haringey",
+    "Harrow", "Havering", "Hillingdon", "Hounslow", "Islington",
+    "Kensington and Chelsea", "Kingston upon Thames", "Lambeth",
+    "Lewisham", "Merton", "Newham", "Redbridge", "Richmond upon Thames",
+    "Southwark", "Sutton", "Tower Hamlets", "Waltham Forest",
+    "Wandsworth", "Westminster",
+}
+
+# Aliases that GPS-centroid matching may produce for City of London
+_BOROUGH_ALIASES = {
+    "city of london police":                 "City of London",
+    "city and county of the city of london": "City of London",
+    "city of london (city)":                 "City of London",
+    "london city":                           "City of London",
+}
+
 # ── ONS Census 2021 London population by broad ethnicity (%) ──────
-# Full ONS breakdown preserved here for auditing.
-# Categories not present in the recorded data are folded into 'Other'
-# by build_population_shares() at runtime — do not edit this to match
-# whichever force's categories happen to appear in a given dataset.
 ONS_ETHNICITY_POPULATION = {
     "Asian": 19.7,
     "Black": 13.5,
@@ -101,23 +119,77 @@ BOROUGH_CENTROIDS = {
 }
 
 
+# ── Borough consolidation ─────────────────────────────────────────
+
+def normalise_borough_name(name: str) -> str:
+    """Normalise known borough name variants to the canonical 33-borough label."""
+    if not isinstance(name, str):
+        return name
+    return _BOROUGH_ALIASES.get(name.strip().lower(), name.strip())
+
+
+def consolidate_boroughs(df: pd.DataFrame, borough_col: str = "borough") -> pd.DataFrame:
+    """
+    Fix (pipeline run): ss_borough_full.csv had 34 rows instead of 33.
+    The extra row was a City of London GPS centroid match under a name
+    variant not matching the canonical label.
+
+    This function:
+      1. Normalises all borough name variants to canonical form using
+         _BOROUGH_ALIASES.
+      2. Aggregates (sum numeric, first non-numeric) for any rows that
+         now share a borough name after normalisation.
+      3. Drops rows whose canonical name is not in LONDON_BOROUGHS_33
+         (catches any non-London GPS matches that crept in).
+
+    Args:
+        df:          DataFrame with a borough column.
+        borough_col: Name of the borough column (default: 'borough').
+
+    Returns:
+        DataFrame with ≤33 rows, deduplicated and aggregated.
+    """
+    df = df.copy()
+    # Drop NaN/None borough rows before normalisation and groupby.
+    # NaN passes through normalise_borough_name unchanged (non-string),
+    # and Pandas groupby can include NaN as a group key in some versions,
+    # producing the spurious 34th row. Explicit drop here is the safest guard.
+    df = df[df[borough_col].notna()].copy()
+    df[borough_col] = df[borough_col].apply(normalise_borough_name)
+
+    numeric_cols     = df.select_dtypes(include="number").columns.tolist()
+    non_numeric_cols = [
+        c for c in df.columns
+        if c not in numeric_cols and c != borough_col
+    ]
+
+    agg_dict = {c: "sum"   for c in numeric_cols}
+    agg_dict.update({c: "first" for c in non_numeric_cols})
+
+    df = df.groupby(borough_col, as_index=False).agg(agg_dict)
+
+    n_before = len(df)
+    df = df[df[borough_col].isin(LONDON_BOROUGHS_33)].copy()
+    n_dropped = n_before - len(df)
+
+    if n_dropped:
+        print(f"  consolidate_boroughs: dropped {n_dropped} non-standard "
+              f"borough row(s). {len(df)} boroughs remain.")
+
+    missing = LONDON_BOROUGHS_33 - set(df[borough_col])
+    if missing:
+        print(f"  consolidate_boroughs: {len(missing)} borough(s) have no "
+              f"stop and search data: {sorted(missing)}")
+
+    return df.reset_index(drop=True)
+
+
 # ── Population share helpers ──────────────────────────────────────
 
 def build_population_shares(recorded_categories: set) -> dict:
     """
-    Collapse ONS population shares to match whatever ethnicity categories
-    actually appear in the recorded data. Any ONS category not present in
-    the data is folded into 'Other'.
-
-    This means the function is robust to forces that record fewer categories
-    than the full ONS breakdown (e.g. Metropolitan Police records four
-    categories, not five), without requiring hardcoded adjustments.
-
-    Args:
-        recorded_categories: set of ethnicity strings found in the data.
-
-    Returns:
-        dict of {ethnicity: population_pct} where percentages sum to ~100%.
+    Collapse ONS population shares to match the ethnicity categories
+    that actually appear in the recorded data.
     """
     shares        = {}
     unmatched_pct = 0.0
@@ -158,8 +230,7 @@ def load_raw(raw_dir: str) -> pd.DataFrame:
         raise FileNotFoundError(
             f"No stop and search CSV files found under {raw_dir}.\n"
             "Expected files matching: data/raw/**/*stop*search*.csv\n"
-            "Ensure the script is run from the project root:\n"
-            "    python processing/06_process_stop_search.py"
+            "Ensure the script is run from the project root."
         )
     print(f"  Found {len(files)} stop and search files")
 
@@ -176,7 +247,6 @@ def load_raw(raw_dir: str) -> pd.DataFrame:
 
 
 def standardise(df: pd.DataFrame) -> pd.DataFrame:
-    # Parse with utc=True then strip timezone to avoid PeriodArray warning
     df["date"]  = pd.to_datetime(df["date"], errors="coerce", utc=True).dt.tz_localize(None)
     df["month"] = df["date"].dt.to_period("M").dt.to_timestamp()
     df["year"]  = df["date"].dt.year
@@ -189,14 +259,6 @@ def standardise(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def map_ethnicity_broad(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Map officer-defined ethnicity to broad groups.
-    The raw column is 'officer-defined_ethnicity' (hyphenated).
-
-    Metropolitan Police records four categories: Asian, Black, White, Other.
-    'Mixed' does not appear in Met data; the ONS Mixed population share is
-    folded into Other by build_population_shares() at comparison time.
-    """
     eth_col = "officer-defined_ethnicity"
     if eth_col not in df.columns:
         print(f"  WARNING: ethnicity column '{eth_col}' not found")
@@ -216,9 +278,8 @@ def map_ethnicity_broad(df: pd.DataFrame) -> pd.DataFrame:
         .fillna("Other")
     )
 
-    found           = set(df["ethnicity_broad"].unique()) - {"Other"}
-    mapped_from_ons = set(mapping.values())
-    absent          = mapped_from_ons - found - {"Other"}
+    found      = set(df["ethnicity_broad"].unique()) - {"Other"}
+    absent     = set(mapping.values()) - found - {"Other"}
     if absent:
         print(f"  Note: ONS categories not present in recorded data: {sorted(absent)}")
         print(f"        These will be folded into 'Other' in population comparisons.")
@@ -228,13 +289,7 @@ def map_ethnicity_broad(df: pd.DataFrame) -> pd.DataFrame:
 
 def assign_boroughs(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Vectorised borough assignment using sklearn BallTree with haversine metric.
-
-    Replaces row-wise haversine loop which was O(n * n_boroughs).
-    BallTree with haversine is approximately 100x faster on 400k+ records.
-
-    Records without GPS coordinates are excluded from borough-level analysis
-    but retained in aggregate statistics.
+    Vectorised borough assignment using sklearn BallTree (haversine metric).
     """
     from sklearn.neighbors import BallTree
 
@@ -244,8 +299,8 @@ def assign_boroughs(df: pd.DataFrame) -> pd.DataFrame:
         pct = round(no_gps / len(df) * 100, 1)
         print(f"  {no_gps:,} records ({pct}%) have no GPS — excluded from borough analysis")
 
-    centroids      = list(BOROUGH_CENTROIDS.items())
-    borough_names  = [b for b, _ in centroids]
+    centroids       = list(BOROUGH_CENTROIDS.items())
+    borough_names   = [b for b, _ in centroids]
     centroid_coords = np.radians([[lat, lon] for _, (lat, lon) in centroids])
 
     gps_df       = df.loc[has_gps].copy()
@@ -272,12 +327,6 @@ def build_outcomes_summary(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_ethnicity_comparison(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compare stop rates by ethnicity against ONS Census 2021 London
-    population shares. Population shares are derived dynamically from
-    ONS_ETHNICITY_POPULATION, folding any unrecorded ONS categories
-    into 'Other' to match the actual recorded data categories.
-    """
     recorded_categories = set(df["ethnicity_broad"].unique()) - {"Unknown"}
     population_shares   = build_population_shares(recorded_categories)
 
@@ -288,8 +337,8 @@ def build_ethnicity_comparison(df: pd.DataFrame) -> pd.DataFrame:
         stop_count = mask.sum()
         if stop_count == 0:
             continue
-        stop_pct  = round(stop_count / total * 100, 1)
-        arr_rate  = round(df.loc[mask, "outcome"].apply(is_arrest).sum() / stop_count * 100, 1)
+        stop_pct = round(stop_count / total * 100, 1)
+        arr_rate = round(df.loc[mask, "outcome"].apply(is_arrest).sum() / stop_count * 100, 1)
         rows.append({
             "ethnicity":       eth,
             "stop_count":      stop_count,
@@ -317,7 +366,35 @@ def build_outcomes_by_search(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_borough_full(df: pd.DataFrame) -> pd.DataFrame:
-    bdf       = df.dropna(subset=["borough"]).copy()
+    """
+    Build borough-level summary and consolidate to exactly the standard
+    33 London boroughs.
+
+    Fix (pipeline run - 34 rows): assign_boroughs() leaves the 'borough'
+    column unset for the 24,142 no-GPS records. In some Pandas versions
+    groupby() treats an unset object column as NaN and includes it as a
+    group key, producing a 34th row with borough=NaN (which appeared in
+    the test output with 24,142 total_searches — exactly the no-GPS count).
+
+    The fix has two layers:
+      1. Filter to rows where borough is a non-empty string before groupby,
+         which is robust regardless of whether the unset value is NaN,
+         None, or an empty string.
+      2. consolidate_boroughs() enforces the LONDON_BOROUGHS_33 allowlist
+         as a second guard, so any stray non-London or malformed rows are
+         dropped before the CSV is written.
+    """
+    df = df.copy()
+    if "borough" not in df.columns:
+        df["borough"] = np.nan
+
+    # Keep only rows with a valid non-empty borough string
+    bdf = df[
+        df["borough"].notna() &
+        (df["borough"].astype(str).str.strip() != "") &
+        (df["borough"].astype(str).str.strip() != "nan")
+    ].copy()
+
     total     = bdf.groupby("borough").size().rename("total_searches")
     arrest_r  = (
         bdf.groupby("borough")["outcome"]
@@ -332,6 +409,10 @@ def build_borough_full(df: pd.DataFrame) -> pd.DataFrame:
     result = pd.concat([total, arrest_r, black_pct], axis=1).reset_index()
     result["lat"] = result["borough"].map(lambda b: BOROUGH_CENTROIDS.get(b, (None, None))[0])
     result["lon"] = result["borough"].map(lambda b: BOROUGH_CENTROIDS.get(b, (None, None))[1])
+
+    # Fix (pipeline run): consolidate name variants and enforce 33-borough list
+    result = consolidate_boroughs(result)
+
     return result
 
 
@@ -376,79 +457,65 @@ def build_changepoint_hypotheses(
     cp_date: pd.Timestamp,
 ) -> pd.DataFrame:
     """
-    Test three competing hypotheses for the August 2024 drugs offence spike
+    Test three competing hypotheses for the drugs offence changepoint
     against observable implications in the stop and search data.
 
-    Each hypothesis makes a different prediction about what we should see
-    in the data if it were true. Presenting all three lets readers evaluate
+    Each hypothesis makes a different prediction about what we should
+    see if it were true. Presenting all three lets readers evaluate
     the evidence rather than accepting a single interpretation.
-
-    Hypotheses:
-      1. More enforcement activity  -> monthly drug searches rise after cp_date
-      2. Changed recording practice -> arrest rate on drug searches falls
-         (same encounters, more recorded as offences regardless of arrest)
-      3. Real increase in drug activity -> drug searches as % of all searches rises
-
-    Args:
-        df:      Full stop and search DataFrame (standardised, with month column).
-        cp_date: Detected changepoint date from drugs_changepoint.csv.
-
-    Returns:
-        DataFrame with columns: hypothesis, metric, before, after, supports.
     """
     col = "object_of_search"
     if col not in df.columns:
         print("  WARNING: object_of_search column missing — cannot build hypothesis table")
         return pd.DataFrame()
 
-    drug_ss = df[df[col].str.lower().str.contains("drug", na=False)].copy()
-    before  = drug_ss[drug_ss["month"] <  cp_date]
-    after   = drug_ss[drug_ss["month"] >= cp_date]
-
+    drug_ss    = df[df[col].str.lower().str.contains("drug", na=False)].copy()
+    before     = drug_ss[drug_ss["month"] <  cp_date]
+    after      = drug_ss[drug_ss["month"] >= cp_date]
     all_before = df[df["month"] <  cp_date]
     all_after  = df[df["month"] >= cp_date]
 
-    def safe_mean(series_or_val):
+    def safe_mean(val):
         try:
-            return round(float(series_or_val), 1)
+            return round(float(val), 1)
         except Exception:
             return float("nan")
 
     rows = [
         {
-            "hypothesis": "More enforcement activity",
-            "metric":     "Monthly drug searches (mean)",
-            "before":     safe_mean(before.groupby("month").size().mean()),
-            "after":      safe_mean(after.groupby("month").size().mean()),
-            "supports":   "Hypothesis supported if 'after' >> 'before'",
-            "verdict_note": (
-                "If this column rises substantially, increased policing activity "
-                "explains the spike in recorded offences."
+            "hypothesis":    "More enforcement activity",
+            "metric":        "Monthly drug searches (mean)",
+            "before":        safe_mean(before.groupby("month").size().mean()),
+            "after":         safe_mean(after.groupby("month").size().mean()),
+            "supports":      "Hypothesis supported if 'after' >> 'before'",
+            "verdict_note":  (
+                "If this column rises substantially, increased policing "
+                "activity explains the spike in recorded offences."
             ),
         },
         {
-            "hypothesis": "Changed recording practice",
-            "metric":     "Arrest rate on drug searches (%)",
-            "before":     safe_mean(before["outcome"].apply(is_arrest).mean() * 100),
-            "after":      safe_mean(after["outcome"].apply(is_arrest).mean() * 100),
-            "supports":   "Hypothesis supported if arrest rate falls after changepoint",
-            "verdict_note": (
-                "If arrest rate falls, the same encounters are being recorded as "
-                "offences more often without a proportionate rise in arrests — "
-                "consistent with a reclassification or recording practice change."
+            "hypothesis":    "Changed recording practice",
+            "metric":        "Arrest rate on drug searches (%)",
+            "before":        safe_mean(before["outcome"].apply(is_arrest).mean() * 100),
+            "after":         safe_mean(after["outcome"].apply(is_arrest).mean() * 100),
+            "supports":      "Hypothesis supported if arrest rate falls after changepoint",
+            "verdict_note":  (
+                "If arrest rate falls, the same encounters are being recorded "
+                "as offences more often without a proportionate rise in arrests "
+                "— consistent with a reclassification or recording practice change."
             ),
         },
         {
-            "hypothesis": "Real increase in drug activity",
-            "metric":     "Drug searches as % of all searches",
-            "before":     safe_mean(
+            "hypothesis":    "Real increase in drug activity",
+            "metric":        "Drug searches as % of all searches",
+            "before":        safe_mean(
                 len(before) / len(all_before) * 100 if len(all_before) > 0 else float("nan")
             ),
-            "after":      safe_mean(
+            "after":         safe_mean(
                 len(after) / len(all_after) * 100 if len(all_after) > 0 else float("nan")
             ),
-            "supports":   "Hypothesis supported if share rises alongside volume",
-            "verdict_note": (
+            "supports":      "Hypothesis supported if share rises alongside volume",
+            "verdict_note":  (
                 "If police are devoting a larger share of all searches to drugs "
                 "after the changepoint, it suggests genuine intelligence-led "
                 "targeting of increased drug activity."
@@ -464,24 +531,8 @@ def build_narrative_stats(
     borough_dep: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Compute statistics cited inline in dashboard narrative text so they are
-    data-derived rather than hardcoded strings.
-
-    Stats produced:
-        deprivation_black_stop_correlation   — Pearson r between avg IMD decile
-                                               and Black stop % across boroughs
-        crime_rate_search_volume_correlation — Pearson r between crime rate and
-                                               total searches across boroughs
-
-    These are written to ss_narrative_stats.csv and should be loaded by
-    data_loaders.py and injected into section text rather than hardcoded.
-
-    Args:
-        ss_borough:  DataFrame from build_borough_full().
-        borough_dep: DataFrame from borough_outliers_deprivation.csv (script 03).
-
-    Returns:
-        DataFrame with columns: stat, value.
+    Compute statistics cited inline in dashboard narrative text so they
+    are data-derived rather than hardcoded strings.
     """
     from scipy.stats import pearsonr
 
@@ -530,16 +581,15 @@ def main():
 
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    # ── Main outputs ──────────────────────────────────────────────
     borough_full = build_borough_full(ss)
 
     outputs = {
-        "ss_outcomes_summary.csv":    build_outcomes_summary(ss),
+        "ss_outcomes_summary.csv":     build_outcomes_summary(ss),
         "ss_ethnicity_comparison.csv": build_ethnicity_comparison(ss),
-        "ss_outcomes_by_search.csv":  build_outcomes_by_search(ss),
-        "ss_borough_full.csv":        borough_full,
-        "ss_drugs_comparison.csv":    build_drugs_comparison(ss, STREET_PATH),
-        "ss_monthly_search_type.csv": build_monthly_search_type(ss),
+        "ss_outcomes_by_search.csv":   build_outcomes_by_search(ss),
+        "ss_borough_full.csv":         borough_full,
+        "ss_drugs_comparison.csv":     build_drugs_comparison(ss, STREET_PATH),
+        "ss_monthly_search_type.csv":  build_monthly_search_type(ss),
     }
 
     for filename, df_out in outputs.items():
@@ -551,7 +601,7 @@ def main():
     cp_path = os.path.join(OUT_DIR, "drugs_changepoint.csv")
     if os.path.exists(cp_path):
         print("  Building ss_changepoint_hypotheses.csv...")
-        cp_date = pd.to_datetime(
+        cp_date    = pd.to_datetime(
             pd.read_csv(cp_path)["change_point_date"].values[0]
         )
         hypotheses = build_changepoint_hypotheses(ss, cp_date)

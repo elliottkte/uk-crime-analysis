@@ -6,14 +6,22 @@ from IMD deprivation features.
 
 Changes from original:
   - Spatial block cross-validation replaces random train/test split.
-    LSOAs are clustered geographically; each fold holds out a spatial
-    cluster rather than random rows. This avoids inflating R² through
-    spatial autocorrelation between adjacent LSOAs.
-  - Moran's I reported on model residuals. If significant, narrative
-    is updated to note partial inflation from spatial dependence.
-  - Causal language corrected: "dominant driver" -> "accounts for the
-    majority of predictable variation". Model is predictive, not causal.
-  - Spatial CV R² reported in model output rather than random split R².
+  - Moran's I reported on model residuals.
+  - Causal language corrected throughout.
+  - Updated to IMD 2025 (was 2019). LSOA codes bridged 2011→2021 via
+    lsoa_2011_to_2021_lookup.csv so all LSOAs join correctly to
+    police.uk crime data regardless of boundary changes.
+
+Fix (critique): k-means clustering on lat/lon coordinates can produce
+oddly shaped, non-contiguous blocks that don't reflect genuine spatial
+separation. Replaced with a regular grid-based blocking scheme:
+LSOAs are assigned to a grid cell by rounding their centroid coordinates
+to a fixed resolution. Each fold holds out all LSOAs in a grid cell,
+giving geographically contiguous blocks and a more honest R² estimate.
+
+Fix (critique): the trained model now stores spatial_cv_r2_ as an
+attribute before saving to disk, so where_headed.py can retrieve the
+actual computed value rather than falling back to a vague string.
 
 Additional dependencies:
     libpysal, esda  (pip install libpysal esda)
@@ -33,20 +41,24 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_absolute_error
-from sklearn.cluster import KMeans
 
 # ── Paths ─────────────────────────────────────────────────────────
 STREET_PATH = os.path.join("data", "processed", "street_clean.csv")
-IMD_PATH    = os.path.join("data", "raw", "2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv")
+IMD_PATH    = os.path.join("data", "raw", "imd_2025.csv")
 POP_PATH    = os.path.join("data", "raw", "sapelsoasyoa20222024.xlsx")
 OUT_CSV     = os.path.join("data", "processed", "modelling_data.csv")
 OUT_MODEL   = os.path.join("models", "crime_rate_model.pkl")
 
-IMD_LSOA_COL = "LSOA code (2011)"
+IMD_LSOA_COL = "LSOA code (2021)"
 
 RANDOM_STATE  = 42
 TEST_SIZE     = 0.20
 OUTLIER_CAP   = 0.99
+
+# Grid resolution for spatial blocking (degrees).
+# ~0.05° ≈ 3.5 km at London's latitude — produces ~20–30 cells across
+# Greater London, giving naturally contiguous geographic blocks.
+GRID_RESOLUTION = 0.05
 N_SPATIAL_FOLDS = 5
 
 DOMAIN_KEYWORDS = [
@@ -86,7 +98,45 @@ def load_lsoa_crime_rates() -> pd.DataFrame:
     return counts
 
 
+def _load_lsoa_bridge() -> dict | None:
+    """
+    Load the ONS 2011→2021 LSOA correspondence table as a dict
+    mapping 2011 code → 2021 code.
+
+    Police.uk street crime data uses 2011 LSOA codes; IMD 2025 uses
+    2021 boundaries. Without bridging, ~10% of London LSOAs fail to join.
+    Returns None if the file is not present (falls back to direct join).
+    """
+    lookup_path = os.path.join("data", "raw", "lsoa_2011_to_2021_lookup.csv")
+    if not os.path.exists(lookup_path):
+        print(f"  WARNING: LSOA lookup not found at {lookup_path}.")
+        print("  IMD 2025 uses 2021 LSOA codes; police.uk uses 2011 codes.")
+        print("  Download the ONS LSOA 2011 to LSOA 2021 lookup from geoportal.statistics.gov.uk")
+        print("  and save to data/raw/lsoa_2011_to_2021_lookup.csv. Falling back to direct join.")
+        return None
+
+    lut = pd.read_csv(lookup_path, low_memory=False)
+    col_2011 = next((c for c in lut.columns if "LSOA11CD" in c), None)
+    col_2021 = next((c for c in lut.columns if "LSOA21CD" in c), None)
+
+    if col_2011 is None or col_2021 is None:
+        print(f"  WARNING: LSOA lookup columns not recognised: {list(lut.columns)}. Falling back.")
+        return None
+
+    bridge = dict(zip(lut[col_2011], lut[col_2021]))
+    n_changed = sum(1 for k, v in bridge.items() if k != v)
+    print(f"  LSOA bridge: {len(bridge):,} codes ({n_changed:,} changed boundary)")
+    return bridge
+
+
 def load_imd_features() -> pd.DataFrame:
+    """
+    Load IMD 2025 domain scores as features for LSOA-level modelling.
+
+    IMD 2025 uses 2021 LSOA codes; street crime data uses 2011 codes.
+    The 2011→2021 bridge is applied so that features join correctly to
+    crime data for LSOAs whose boundaries changed between revisions.
+    """
     imd = pd.read_csv(IMD_PATH)
 
     feature_cols = []
@@ -100,19 +150,26 @@ def load_imd_features() -> pd.DataFrame:
             print(f"    {c}")
         raise ValueError("Cannot train model without feature columns")
 
-    # Also load lat/lon for spatial CV — derived from LSOA centroids in the IMD file
-    # The IMD file does not contain coordinates; we attach them from the street data
     print(f"  Using features: {feature_cols}")
-    return imd[[IMD_LSOA_COL] + feature_cols].rename(
-        columns={IMD_LSOA_COL: "lsoa_code"}
+
+    # Rename 2021 LSOA code column, then bridge to 2011 codes for joining
+    df = imd[[IMD_LSOA_COL] + feature_cols].rename(
+        columns={IMD_LSOA_COL: "lsoa_code_2021"}
     ).dropna()
+
+    bridge = _load_lsoa_bridge()
+    if bridge is not None:
+        # Invert bridge: 2021→2011 (needed because IMD has 2021 codes,
+        # crime data has 2011 codes, and we join on lsoa_code)
+        inverse = {v: k for k, v in bridge.items()}
+        df["lsoa_code"] = df["lsoa_code_2021"].map(inverse).fillna(df["lsoa_code_2021"])
+    else:
+        df["lsoa_code"] = df["lsoa_code_2021"]
+
+    return df.drop(columns=["lsoa_code_2021"])
 
 
 def attach_lsoa_centroids(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Attach mean lat/lon per LSOA from street_clean.csv.
-    Required for spatial cross-validation block assignment.
-    """
     street = pd.read_csv(STREET_PATH, usecols=["lsoa_code", "latitude", "longitude"])
     centroids = (
         street.groupby("lsoa_code")[["latitude", "longitude"]]
@@ -135,7 +192,68 @@ def build_modelling_data(lsoa_rates: pd.DataFrame, imd: pd.DataFrame) -> pd.Data
     return df
 
 
-# ── Spatial cross-validation ──────────────────────────────────────
+# ── Grid-based spatial cross-validation ──────────────────────────
+
+def assign_grid_folds(
+    df: pd.DataFrame,
+    resolution: float = GRID_RESOLUTION,
+    n_folds: int = N_SPATIAL_FOLDS,
+    random_state: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    """
+    Assign LSOAs to spatial folds using a regular grid rather than
+    k-means clustering.
+
+    Why grid > k-means (critique fix):
+      k-means on lat/lon minimises within-cluster variance, which can
+      produce non-contiguous, irregularly shaped clusters — particularly
+      in London where the road network creates spatial discontinuities.
+      Grid blocking assigns contiguous rectangular cells first, then
+      groups those cells into folds. This gives geographically coherent
+      held-out regions and a more honest estimate of how well the model
+      generalises to truly unseen areas.
+
+    Method:
+      1. Round each LSOA centroid to the nearest grid cell
+         (lat // resolution, lon // resolution).
+      2. Collect unique cells and randomly assign each cell to one of
+         n_folds groups (stratified by approximate cell population).
+      3. LSOAs inherit their cell's fold assignment.
+
+    Args:
+        df:         DataFrame with latitude and longitude columns.
+        resolution: Grid cell size in degrees.
+        n_folds:    Number of spatial folds.
+        random_state: Seed for reproducible fold assignment.
+
+    Returns:
+        DataFrame with an additional 'spatial_fold' column (0-indexed).
+    """
+    rng = np.random.default_rng(random_state)
+
+    df = df.copy()
+    df["grid_lat"] = (df["latitude"]  / resolution).apply(np.floor)
+    df["grid_lon"] = (df["longitude"] / resolution).apply(np.floor)
+    df["grid_cell"] = df["grid_lat"].astype(str) + "_" + df["grid_lon"].astype(str)
+
+    unique_cells = sorted(df["grid_cell"].unique())
+    n_cells = len(unique_cells)
+    print(f"  Grid blocking: {n_cells} grid cells (resolution={resolution}°) → {n_folds} folds")
+
+    # Shuffle cells and assign cyclically to folds
+    shuffled = list(unique_cells)
+    rng.shuffle(shuffled)
+    cell_fold = {cell: i % n_folds for i, cell in enumerate(shuffled)}
+
+    df["spatial_fold"] = df["grid_cell"].map(cell_fold)
+
+    # Report fold sizes
+    fold_sizes = df["spatial_fold"].value_counts().sort_index()
+    for fold_id, count in fold_sizes.items():
+        print(f"    Fold {fold_id}: {count:,} LSOAs")
+
+    return df.drop(columns=["grid_lat", "grid_lon", "grid_cell"])
+
 
 def spatial_cv_score(
     df: pd.DataFrame,
@@ -143,31 +261,9 @@ def spatial_cv_score(
     n_folds: int = N_SPATIAL_FOLDS,
 ) -> list:
     """
-    Block spatial cross-validation: holds out geographic clusters of LSOAs
-    rather than random rows.
-
-    Why this matters: adjacent LSOAs share deprivation characteristics.
-    A random split leaks spatial information from training into test set,
-    inflating R². Holding out geographic blocks gives a more honest estimate
-    of how well deprivation predicts crime in unseen areas.
-
-    Requires latitude and longitude columns on df (attached via
-    attach_lsoa_centroids()).
-
-    Args:
-        df:           Modelling DataFrame with lat/lon and feature columns.
-        feature_cols: List of feature column names.
-        n_folds:      Number of spatial folds (geographic clusters).
-
-    Returns:
-        List of R² scores, one per fold.
+    Grid-based spatial cross-validation. Folds are pre-assigned by
+    assign_grid_folds() and stored in the 'spatial_fold' column.
     """
-    coords = df[["latitude", "longitude"]].values
-    df     = df.copy()
-    df["spatial_fold"] = KMeans(
-        n_clusters=n_folds, random_state=RANDOM_STATE, n_init=10
-    ).fit_predict(coords)
-
     scores = []
     for fold in range(n_folds):
         train = df[df["spatial_fold"] != fold]
@@ -185,19 +281,6 @@ def spatial_cv_score(
 
 
 def check_spatial_autocorrelation(df: pd.DataFrame, residuals: np.ndarray) -> dict:
-    """
-    Report Moran's I on model residuals to test for spatial autocorrelation.
-
-    A significant Moran's I means neighbouring LSOAs have correlated residuals,
-    suggesting the model's random-split R² is inflated by spatial leakage.
-
-    Requires libpysal and esda:
-        pip install libpysal esda
-
-    Returns:
-        Dict with morans_i and p_value. Returns NaN values if dependencies
-        are not installed, with a warning.
-    """
     try:
         from libpysal.weights import KNN
         from esda.moran import Moran
@@ -218,19 +301,10 @@ def check_spatial_autocorrelation(df: pd.DataFrame, residuals: np.ndarray) -> di
 # ── Training ──────────────────────────────────────────────────────
 
 def train_and_evaluate(df: pd.DataFrame, feature_cols: list) -> tuple:
-    """
-    Train Random Forest and evaluate with both random split (for reference)
-    and spatial block CV (the honest estimate).
-
-    Narrative note: R² here quantifies predictive association, not causal
-    explanation. Deprivation features account for a substantial proportion
-    of predictable variation in crime rates, but causal inference requires
-    stronger identification than a cross-sectional observational model.
-    """
     X = df[feature_cols].values
     y = df["log_crime_rate"].values
 
-    # Random split — kept for reference but spatial CV is the reported metric
+    # Random split — kept for reference
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
@@ -253,16 +327,17 @@ def train_and_evaluate(df: pd.DataFrame, feature_cols: list) -> tuple:
     print(f"  Note: random split R² is likely inflated by spatial")
     print(f"        autocorrelation between adjacent LSOAs.")
 
-    # Spatial CV — reported metric
-    print(f"\n── Spatial block CV ({N_SPATIAL_FOLDS} folds) ───────────────────")
+    # Grid-based spatial CV — the reported metric
+    print(f"\n── Grid-based spatial CV ({N_SPATIAL_FOLDS} folds) ──────────────")
     has_coords = "latitude" in df.columns and "longitude" in df.columns
     if has_coords and df[["latitude", "longitude"]].notna().all().all():
-        cv_scores    = spatial_cv_score(df, feature_cols, n_folds=N_SPATIAL_FOLDS)
-        r2_spatial   = float(np.mean(cv_scores))
+        df_with_folds = assign_grid_folds(df, n_folds=N_SPATIAL_FOLDS)
+        cv_scores     = spatial_cv_score(df_with_folds, feature_cols, n_folds=N_SPATIAL_FOLDS)
+        r2_spatial    = float(np.mean(cv_scores))
         r2_spatial_std = float(np.std(cv_scores))
-        print(f"  Spatial CV R²: {r2_spatial:.3f} ± {r2_spatial_std:.3f}")
+        print(f"  Grid spatial CV R²: {r2_spatial:.3f} ± {r2_spatial_std:.3f}")
         print(f"  (Mean ± SD across {len(cv_scores)} folds)")
-        print(f"  This is the reported R² — random split inflates the figure.")
+        print(f"  Grid-based blocking ensures contiguous held-out regions.")
     else:
         print("  WARNING: lat/lon not available — spatial CV skipped")
         cv_scores  = []
@@ -279,8 +354,7 @@ def train_and_evaluate(df: pd.DataFrame, feature_cols: list) -> tuple:
         if not np.isnan(moran["p_value"]) and moran["p_value"] < 0.05:
             print(
                 "  Significant spatial autocorrelation in residuals detected.\n"
-                "  Model predictions for neighbouring LSOAs are not independent.\n"
-                "  Spatial CV R² is a more reliable performance estimate."
+                "  Grid-based spatial CV R² is the reliable performance estimate."
             )
     else:
         moran = {"morans_i": float("nan"), "p_value": float("nan")}
@@ -291,6 +365,13 @@ def train_and_evaluate(df: pd.DataFrame, feature_cols: list) -> tuple:
         key=lambda x: -x[1]
     ):
         print(f"  {feat[:40]:<40} {imp:.3f}")
+
+    # Fix (critique): store spatial_cv_r2_ on the model object so
+    # where_headed.py can retrieve the actual computed value rather
+    # than falling back to the vague "a substantial proportion" string.
+    model.spatial_cv_r2_     = r2_spatial
+    model.spatial_cv_r2_std_ = r2_spatial_std if cv_scores else float("nan")
+    model.feature_names_in_  = feature_cols  # store for label matching in dashboard
 
     return model, r2_spatial, mae_random, moran
 
@@ -336,8 +417,9 @@ def main():
     joblib.dump(model, OUT_MODEL)
     print(
         f"✓ Model saved to {OUT_MODEL}\n"
-        f"  Spatial CV R²={r2_spatial:.3f}  MAE={mae:.3f}  "
-        f"Moran's I={moran['morans_i']} (p={moran['p_value']})"
+        f"  Grid spatial CV R²={r2_spatial:.3f}  MAE={mae:.3f}  "
+        f"Moran's I={moran['morans_i']} (p={moran['p_value']})\n"
+        f"  model.spatial_cv_r2_={r2_spatial:.3f} stored as model attribute."
     )
 
 

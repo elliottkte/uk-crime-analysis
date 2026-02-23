@@ -17,8 +17,8 @@ import time
 import argparse
 
 SCRIPTS = [
-    ("01", "processing/01_clean_street_data.py"),
-    ("02", "processing/02_economic_analysis.py"),
+   # ("01", "processing/01_clean_street_data.py"),
+   # ("02", "processing/02_economic_analysis.py"),
     ("03", "processing/03_deprivation_correlations.py"),
     ("04", "processing/04_train_model.py"),
     ("05", "processing/05_vulnerability_index.py"),

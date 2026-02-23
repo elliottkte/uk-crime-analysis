@@ -1,16 +1,23 @@
 """
 03_deprivation_correlations.py
 ------------------------------
-Joins crime data to the IMD 2019 dataset, calculates borough-level
+Joins crime data to the IMD 2025 dataset, calculates borough-level
 correlations between deprivation domains and crime types, and
 identifies outlier boroughs.
 
-Key file details from notebooks:
-  - Street file: street_clean.csv
-  - IMD file: 2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv
-    Columns: 'LSOA code (2011)', 'Local Authority District name (2019)'
+Key file details:
+  - Street file: street_clean.csv (uses 2011 LSOA codes)
+  - IMD file: imd_2025.csv
+    Columns: 'LSOA code (2021)', 'Local Authority District name (2024)'
   - Population: sapelsoasyoa20222024.xlsx, sheet 'Mid-2022 LSOA 2021',
     skiprows=3, cols [2,3,4] -> lsoa_code, lsoa_name, population
+
+Update (IMD 2025):
+  - IMD_LSOA_COL updated from 'LSOA code (2011)' to 'LSOA code (2021)'
+  - IMD_BOROUGH_COL updated from 'Local Authority District name (2019)'
+    to 'Local Authority District name (2024)'
+  - _load_lsoa_bridge() added: maps 2011 police.uk LSOA codes to 2021
+    IMD codes so ~10% of LSOAs whose boundaries changed still join.
 
 Outputs:
     data/processed/domain_crime_correlations.csv
@@ -26,18 +33,17 @@ import pandas as pd
 from scipy import stats
 
 # ── Paths ─────────────────────────────────────────────────────────
-STREET_PATH = os.path.join("data", "processed", "street_clean.csv")
-IMD_PATH    = os.path.join("data", "raw", "2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv")
-POP_PATH    = os.path.join("data", "raw", "sapelsoasyoa20222024.xlsx")
-OUT_DIR     = os.path.join("data", "processed")
+STREET_PATH      = os.path.join("data", "processed", "street_clean.csv")
+IMD_PATH         = os.path.join("data", "raw", "imd_2025.csv")
+POP_PATH         = os.path.join("data", "raw", "sapelsoasyoa20222024.xlsx")
+LSOA_LOOKUP_PATH = os.path.join("data", "raw", "lsoa_2011_to_2021_lookup.csv")
+OUT_DIR          = os.path.join("data", "processed")
 
-# ── IMD column names as they appear in the raw file ───────────────
-IMD_LSOA_COL    = "LSOA code (2011)"
-IMD_BOROUGH_COL = "Local Authority District name (2019)"
+# ── IMD 2025 column names ─────────────────────────────────────────
+IMD_LSOA_COL    = "LSOA code (2021)"
+IMD_BOROUGH_COL = "Local Authority District name (2024)"
 
 # ── Deprivation domain columns to look for in the IMD file ────────
-# The notebook only used LSOA code and borough, so we search for
-# score columns by keyword. Adjust if your file uses different names.
 DOMAIN_KEYWORDS = {
     "IMD":         ["index of multiple deprivation (imd) score"],
     "Income":      ["income score"],
@@ -85,8 +91,36 @@ BOROUGH_CENTROIDS = {
     "Westminster":             (51.4975, -0.1357),
 }
 
-# ── Filter to London boroughs only ───────────────────────────────
 LONDON_BOROUGHS = set(BOROUGH_CENTROIDS.keys())
+
+
+# ── LSOA bridge (2011 → 2021) ─────────────────────────────────────
+
+def _load_lsoa_bridge():
+    """
+    Load the ONS 2011->2021 LSOA correspondence table.
+
+    Returns a dict {lsoa_2011: lsoa_2021} or None if file not found.
+    Police.uk uses 2011 LSOA codes; IMD 2025 uses 2021 codes.
+    Without bridging, ~10% of LSOAs whose boundaries changed will not join.
+    """
+    if not os.path.exists(LSOA_LOOKUP_PATH):
+        print("  WARNING: lsoa_2011_to_2021_lookup.csv not found.")
+        print("  Falling back to direct join (changed-boundary LSOAs will not match).")
+        return None
+
+    lut = pd.read_csv(LSOA_LOOKUP_PATH, low_memory=False)
+    col_2011 = next((c for c in lut.columns if "LSOA11CD" in c), None)
+    col_2021 = next((c for c in lut.columns if "LSOA21CD" in c), None)
+
+    if col_2011 is None or col_2021 is None:
+        print(f"  WARNING: LSOA lookup columns not recognised: {list(lut.columns)}")
+        return None
+
+    bridge = dict(zip(lut[col_2011], lut[col_2021]))
+    n_changed = sum(1 for k, v in bridge.items() if k != v)
+    print(f"  LSOA bridge loaded: {len(bridge):,} codes ({n_changed:,} changed boundary)")
+    return bridge
 
 
 # ── Loaders ───────────────────────────────────────────────────────
@@ -98,14 +132,16 @@ def load_street() -> pd.DataFrame:
     return df
 
 
-def load_imd() -> pd.DataFrame:
+def load_imd(bridge: dict | None = None) -> pd.DataFrame:
     """
-    Load IMD and normalise column names.
-    Searches for domain score columns by keyword (case-insensitive).
+    Load IMD 2025 and normalise column names.
+
+    The IMD file uses 2021 LSOA codes. If a bridge dict is provided,
+    each 2021 LSOA code is mapped back to its 2011 equivalent so that
+    the lsoa_code column matches police.uk crime data.
     """
     imd = pd.read_csv(IMD_PATH)
 
-    # Build mapping from actual column names to short labels
     col_map = {
         IMD_LSOA_COL:    "lsoa_code",
         IMD_BOROUGH_COL: "borough",
@@ -123,7 +159,6 @@ def load_imd() -> pd.DataFrame:
         print("  WARNING: no domain score columns found in IMD file")
         print(f"  Available columns: {imd.columns.tolist()}")
 
-    # Also find decile column
     for col in imd.columns:
         if "decile" in col.lower() and "imd" in col.lower():
             col_map[col] = "imd_decile"
@@ -131,6 +166,16 @@ def load_imd() -> pd.DataFrame:
 
     keep = [c for c in col_map if c in imd.columns]
     imd  = imd[keep].rename(columns=col_map)
+
+    # Bridge 2021 LSOA codes back to 2011 so joins to police.uk work
+    if bridge is not None:
+        # bridge is 2011->2021; invert to get 2021->2011
+        inv_df = (
+            pd.DataFrame(list(bridge.items()), columns=["lsoa_2011", "lsoa_2021"])
+            .drop_duplicates(subset=["lsoa_2021"], keep="first")
+        )
+        inverse = inv_df.set_index("lsoa_2021")["lsoa_2011"]
+        imd["lsoa_code"] = imd["lsoa_code"].map(inverse).fillna(imd["lsoa_code"])
 
     # Filter to London
     imd = imd[imd["borough"].isin(LONDON_BOROUGHS)]
@@ -141,10 +186,6 @@ def load_imd() -> pd.DataFrame:
 
 
 def load_population() -> pd.DataFrame:
-    """
-    Load ONS LSOA population estimates.
-    Matches notebook: sheet 'Mid-2022 LSOA 2021', skiprows=3, cols [2,3,4].
-    """
     pop = pd.read_excel(
         POP_PATH,
         sheet_name="Mid-2022 LSOA 2021",
@@ -180,7 +221,7 @@ def build_borough_imd(imd: pd.DataFrame) -> pd.DataFrame:
 def build_borough_crime_rates(
     street: pd.DataFrame, pop: pd.DataFrame, imd: pd.DataFrame
 ) -> pd.DataFrame:
-    lookup = imd[["lsoa_code", "borough"]].drop_duplicates()
+    lookup   = imd[["lsoa_code", "borough"]].drop_duplicates()
     street_b = street.merge(lookup, on="lsoa_code", how="left")
     street_b = street_b[street_b["borough"].isin(LONDON_BOROUGHS)]
 
@@ -188,7 +229,6 @@ def build_borough_crime_rates(
     years  = street_b["year"].nunique()
     counts["annual_crimes"] = counts["total_crimes"] / years
 
-    # Borough-level population from LSOA sums
     borough_pop = (
         imd[["lsoa_code", "borough"]]
         .merge(pop, on="lsoa_code", how="left")
@@ -212,7 +252,7 @@ def build_domain_correlations(
     borough_crime: pd.DataFrame,
     imd: pd.DataFrame,
 ) -> pd.DataFrame:
-    lookup = imd[["lsoa_code", "borough"]].drop_duplicates()
+    lookup   = imd[["lsoa_code", "borough"]].drop_duplicates()
     street_b = street.merge(lookup, on="lsoa_code", how="left")
     type_rates = (
         street_b.groupby(["borough", "crime_type"])
@@ -269,23 +309,12 @@ def build_borough_outliers(
     merged = borough_imd.merge(borough_crime, on="borough", how="inner")
     merged.dropna(subset=[imd_col, "avg_crime_rate"], inplace=True)
 
-    # Compute regression residuals for map sizing/context
     slope, intercept, r, p, se = stats.linregress(
         merged[imd_col], merged["avg_crime_rate"]
     )
     merged["predicted"] = intercept + slope * merged[imd_col]
     merged["residual"]  = merged["avg_crime_rate"] - merged["predicted"]
 
-    # ── Quadrant classification ───────────────────────────────────
-    # In London, high-footfall wealthy boroughs (Westminster, City) dominate
-    # the regression line, so residual-based thresholds miss deprived boroughs.
-    # Instead we classify by quadrant relative to London medians:
-    #   High crime + high deprivation  -> "Deprived and high crime"
-    #   High crime + low deprivation   -> "Affluent but high crime"
-    #   Otherwise                      -> "As expected"
-    #
-    # IMD score: higher score = MORE deprived (opposite of decile)
-    # We use the London median crime rate and London median IMD score as thresholds.
     median_crime = merged["avg_crime_rate"].median()
     median_imd   = merged[imd_col].median()
 
@@ -293,7 +322,7 @@ def build_borough_outliers(
         high_crime = row["avg_crime_rate"] > median_crime
         if not high_crime:
             return "As expected"
-        high_deprivation = row[imd_col] > median_imd  # higher IMD score = more deprived
+        high_deprivation = row[imd_col] > median_imd
         if high_deprivation:
             return "Deprived and high crime"
         return "Affluent but high crime"
@@ -327,7 +356,8 @@ def main():
     print("Loading IMD data...")
     if not os.path.exists(IMD_PATH):
         raise FileNotFoundError(f"IMD file not found at {IMD_PATH}")
-    imd = load_imd()
+    bridge = _load_lsoa_bridge()
+    imd    = load_imd(bridge)
 
     print("Loading population data...")
     if not os.path.exists(POP_PATH):
